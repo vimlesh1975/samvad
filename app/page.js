@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const refreshMs = 2000;
+const blankStoryHtml = '<p><font color="red">----</font></p>';
+const defaultTestStoryHtml = '<p><span style="color:#00ff66;background-color:#000000;">CUSTOM HTML RENDER TEST</span></p><p>This line was sent from the Next.js controller.</p><p><font color="red">----</font></p>';
+const defaultRunorderHtml = '<p><span style="color:#00ff66;">{{serial}}. {{title}}</span></p><p>Story ID: {{storyID}}</p><p><font color="red">----</font></p>';
 
 export default function Home() {
   const [status, setStatus] = useState(null);
@@ -11,10 +14,18 @@ export default function Home() {
   const [error, setError] = useState('');
   const [speedInput, setSpeedInput] = useState('');
   const [fontSizeInput, setFontSizeInput] = useState('');
+  const [bgColorInput, setBgColorInput] = useState('#050505');
+  const [fgColorInput, setFgColorInput] = useState('#ffffff');
+  const [alternateColorInput, setAlternateColorInput] = useState(false);
+  const [customStoryHtml, setCustomStoryHtml] = useState(defaultTestStoryHtml);
+  const [runorderHtml, setRunorderHtml] = useState(defaultRunorderHtml);
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
+  const [colorStatus, setColorStatus] = useState('');
   const [controlStatus, setControlStatus] = useState('');
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
+  const [storyContentStatus, setStoryContentStatus] = useState('');
+  const [runorderContentStatus, setRunorderContentStatus] = useState('');
   const speedTouched = useRef(false);
   const fontSizeTouched = useRef(false);
   const latest = status?.latestMessage;
@@ -40,6 +51,16 @@ export default function Home() {
       setError('');
     } catch (refreshError) {
       setError(refreshError.message);
+    }
+  }
+
+  async function reconnectSocket() {
+    try {
+      await fetch('/api/reconnect', { method: 'POST' });
+      setError('');
+      setTimeout(refresh, 1000);
+    } catch (reconnectError) {
+      setError(reconnectError.message);
     }
   }
 
@@ -109,6 +130,20 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [fontSizeInput, status?.state]);
 
+  useEffect(() => {
+    if (summary.sync?.BgColor && isHexColor(summary.sync.BgColor)) {
+      setBgColorInput(summary.sync.BgColor);
+    }
+
+    if (summary.sync?.FgColor && isHexColor(summary.sync.FgColor)) {
+      setFgColorInput(summary.sync.FgColor);
+    }
+
+    if (typeof summary.sync?.AlternateColorStatus === 'boolean') {
+      setAlternateColorInput(summary.sync.AlternateColorStatus);
+    }
+  }, [summary.sync?.BgColor, summary.sync?.FgColor]);
+
   async function sendSpeedValue(speed) {
     setSendStatus('Sending...');
 
@@ -150,6 +185,54 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (fontSizeError) {
       setFontSizeStatus(fontSizeError.message);
+    }
+  }
+
+  async function sendColors() {
+    setColorStatus('Sending test Sync...');
+
+    try {
+      const response = await fetch('/api/colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bgColor: bgColorInput,
+          fgColor: fgColorInput,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to send colors');
+      }
+
+      setColorStatus(`Sent ${result.fgColor} on ${result.bgColor}`);
+      setTimeout(refresh, 800);
+    } catch (colorError) {
+      setColorStatus(colorError.message);
+    }
+  }
+
+  async function sendAlternateColor(enabled) {
+    setColorStatus('Sending alternate color...');
+
+    try {
+      const response = await fetch('/api/alternate-color', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to send alternate color');
+      }
+
+      setAlternateColorInput(result.enabled);
+      setColorStatus(`Alternate color ${result.enabled ? 'on' : 'off'}`);
+      setTimeout(refresh, 800);
+    } catch (colorError) {
+      setColorStatus(colorError.message);
     }
   }
 
@@ -204,6 +287,53 @@ export default function Home() {
     }
   }
 
+  async function sendStoryContent(html, label) {
+    setStoryContentStatus(`Sending ${label}...`);
+
+    try {
+      const response = await fetch('/api/story-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? `Failed to send ${label}`);
+      }
+
+      setStoryContentStatus(`Sent ${label} to story ${result.storyID}`);
+      setTimeout(refresh, 800);
+    } catch (storyContentError) {
+      setStoryContentStatus(storyContentError.message);
+    }
+  }
+
+  async function sendRunorderContent(mode) {
+    setRunorderContentStatus(`Sending ${mode} to runorder...`);
+
+    try {
+      const response = await fetch('/api/runorder-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          html: runorderHtml,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? `Failed to send ${mode} runorder`);
+      }
+
+      setRunorderContentStatus(`Sent ${result.mode} to ${result.count} stories`);
+      setTimeout(refresh, 1200);
+    } catch (runorderError) {
+      setRunorderContentStatus(runorderError.message);
+    }
+  }
+
   return (
     <main className="shell">
       <section className="topbar">
@@ -215,6 +345,7 @@ export default function Home() {
           <span />
           {status?.state ?? 'loading'}
         </div>
+        <button onClick={reconnectSocket} type="button">Reconnect</button>
       </section>
 
       {error ? <div className="alert">{error}</div> : null}
@@ -278,6 +409,8 @@ export default function Home() {
                 <th>Sr.no.</th>
                 <th>Title</th>
                 <th>Story ID</th>
+                <th>Content</th>
+                <th>Rendered HTML</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -293,12 +426,19 @@ export default function Home() {
                     <td>{story.serial}</td>
                     <td>{story.title}</td>
                     <td>{story.storyID}</td>
+                    <td className="story-content">{story.content || '-'}</td>
+                    <td>
+                      <div
+                        className="render-preview"
+                        dangerouslySetInnerHTML={{ __html: story.htmlContent || '-' }}
+                      />
+                    </td>
                     <td>{String(story.storyID) === String(summary.story?.CurrentStoryId) ? 'Current' : story.blocked ? 'Blocked' : ''}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4">{storiesState.error ?? 'Waiting for stories'}</td>
+                  <td colSpan="6">{storiesState.error ?? 'Waiting for stories'}</td>
                 </tr>
               )}
             </tbody>
@@ -358,6 +498,46 @@ export default function Home() {
 
       <section className="panel">
         <div className="panel-heading">
+          <h2>Colors</h2>
+          <span className="muted">Experimental Sync color test</span>
+        </div>
+        <div className="color-form">
+          <label className="toggle-label">
+            <input
+              checked={alternateColorInput}
+              disabled={status?.state !== 'open'}
+              type="checkbox"
+              onChange={(event) => sendAlternateColor(event.target.checked)}
+            />
+            <span>Alternate Color</span>
+          </label>
+          <label>
+            <span>Background</span>
+            <input
+              aria-label="Background color"
+              type="color"
+              value={bgColorInput}
+              onChange={(event) => setBgColorInput(event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Font</span>
+            <input
+              aria-label="Font color"
+              type="color"
+              value={fgColorInput}
+              onChange={(event) => setFgColorInput(event.target.value)}
+            />
+          </label>
+          <button disabled={status?.state !== 'open'} onClick={sendColors} type="button">
+            Try Colors
+          </button>
+          {colorStatus ? <span className="send-status">{colorStatus}</span> : null}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
           <h2>Playback</h2>
           <span className="muted">Current state: {summary.sync?.PlayPause ? 'Playing' : 'Paused or stopped'}</span>
         </div>
@@ -373,6 +553,50 @@ export default function Home() {
           </button>
           {controlStatus ? <span className="send-status">{controlStatus}</span> : null}
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Renderer Test</h2>
+          <span className="muted">Converts HTML input to Samvad story format</span>
+        </div>
+        <div className="renderer-actions">
+          <button disabled={status?.state !== 'open'} onClick={() => sendStoryContent(blankStoryHtml, 'blank renderer')} type="button">
+            Blank Renderer
+          </button>
+          <button disabled={status?.state !== 'open'} onClick={() => sendStoryContent(customStoryHtml, 'custom content')} type="button">
+            Send Custom Content
+          </button>
+          {storyContentStatus ? <span className="send-status">{storyContentStatus}</span> : null}
+        </div>
+        <textarea
+          aria-label="Custom story HTML"
+          className="custom-html"
+          value={customStoryHtml}
+          onChange={(event) => setCustomStoryHtml(event.target.value)}
+        />
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Runorder Content</h2>
+          <span className="muted">Sends content to every story in the current runorder</span>
+        </div>
+        <div className="renderer-actions">
+          <button disabled={status?.state !== 'open'} onClick={() => sendRunorderContent('blank')} type="button">
+            Blank Whole Runorder
+          </button>
+          <button disabled={status?.state !== 'open'} onClick={() => sendRunorderContent('custom')} type="button">
+            Send To Whole Runorder
+          </button>
+          {runorderContentStatus ? <span className="send-status">{runorderContentStatus}</span> : null}
+        </div>
+        <textarea
+          aria-label="Runorder story HTML template"
+          className="custom-html"
+          value={runorderHtml}
+          onChange={(event) => setRunorderHtml(event.target.value)}
+        />
       </section>
 
       <section className="grid two">
@@ -465,4 +689,8 @@ function getCurrentSpeed(summary) {
 
 function getCurrentFontSize(summary) {
   return summary.fontSize?.FontSize ?? summary.sync?.FontSize;
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value));
 }

@@ -59,6 +59,21 @@ input[type="range"] {
   width: min(420px, 100%);
 }
 
+input[type="color"] {
+  cursor: pointer;
+  min-height: 40px;
+  padding: 4px;
+  width: 64px;
+}
+
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  padding: 10px;
+}
+
 code,
 pre {
   font-family: Consolas, Monaco, monospace;
@@ -278,7 +293,7 @@ h2 {
 
 .stories-table {
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 1200px;
   width: 100%;
 }
 
@@ -315,6 +330,22 @@ h2 {
   font-weight: 700;
 }
 
+.story-content {
+  color: var(--muted);
+  max-width: 360px;
+  white-space: pre-wrap;
+}
+
+.render-preview {
+  background: #050505;
+  border-radius: 6px;
+  color: #ffffff;
+  max-height: 220px;
+  max-width: 420px;
+  overflow: auto;
+  padding: 10px;
+}
+
 .speed-form {
   align-items: center;
   display: flex;
@@ -344,6 +375,51 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.renderer-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.custom-html {
+  font-family: Consolas, Monaco, monospace;
+  min-height: 96px;
+  resize: vertical;
+  width: 100%;
+}
+
+.color-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.color-form label {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.color-form .toggle-label {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.color-form .toggle-label input {
+  min-height: auto;
+  width: auto;
+}
+
+.color-form label span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .send-status {
