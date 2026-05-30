@@ -1,0 +1,23 @@
+{
+  "name": "samvad",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "next.config.mjs",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "inspect:ws": "node scripts/inspect-ws.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "fast-xml-parser": "^5.8.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "ws": "^8.21.0"
+  }
+}
