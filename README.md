@@ -5,8 +5,8 @@ Small Next.js JavaScript project that connects to the Samvad teleprompter WebSoc
 Default targets:
 
 - Web UI: `http://localhost:3000/`
-- Samvad WebSocket: `ws://192.168.0.188:9095`
-- Samvad source UI: `http://192.168.0.188:9000/`
+- Samvad WebSocket: configured with `SAMVAD_WS_URL` or `SAMVAD_HOST` + `SAMVAD_WS_PORT`
+- Samvad source UI: configured with `SAMVAD_HTTP_URL` or `SAMVAD_HOST` + `SAMVAD_HTTP_PORT`
 
 ## Run
 
@@ -29,7 +29,11 @@ npm run inspect:ws
 
 Optional environment variables:
 
-- `SAMVAD_WS_URL`, default `ws://192.168.0.188:9095`
+- `SAMVAD_HOST`
+- `SAMVAD_HTTP_PORT`
+- `SAMVAD_WS_PORT`
+- `SAMVAD_HTTP_URL`
+- `SAMVAD_WS_URL`
 - `INSPECT_MS`, default `20000`
 - `PORT`, default `3000`
 - `MAX_MESSAGES`, default `100`
@@ -44,7 +48,7 @@ Example response:
 
 ```json
 {
-  "url": "ws://192.168.0.188:9095",
+  "url": "ws://<SAMVAD_HOST>:<SAMVAD_WS_PORT>",
   "state": "open",
   "messageCount": 13,
   "latestMessage": {
@@ -252,6 +256,163 @@ Example response:
 }
 ```
 
+### `POST /api/runorder-content`
+
+Sends content to multiple stories in the current runorder.
+
+Supported modes:
+
+- `blank`: blanks every story.
+- `custom`: sends the same HTML template to every story. Supports `{{serial}}`, `{{title}}`, and `{{storyID}}`.
+- `lines`: treats each non-empty newline as one story. Line 1 goes to story 1, line 2 goes to story 2. Extra lines are ignored; extra stories are skipped.
+
+Example request for newline-separated scripts:
+
+```json
+{
+  "mode": "lines",
+  "html": "First story script text\nSecond story script text\nThird story script text"
+}
+```
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "sentAt": "2026-05-30T08:10:00.000Z",
+  "roID": "DDNRCS_RO",
+  "mode": "lines",
+  "count": 3,
+  "skippedCount": 0
+}
+```
+
+### `POST /api/runorder-create`
+
+Creates a new Samvad runorder in a folder. Samvad's root folder id is usually `f1`.
+
+Example request:
+
+```json
+{
+  "name": "Morning Bulletin",
+  "parentID": "f1"
+}
+```
+
+XML sent to Samvad:
+
+```xml
+<PCSyncPlay><itemCreate><itemType>runorder</itemType><itemSlug>Morning Bulletin</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
+```
+
+This is the same message the Samvad web UI sends from its folder tree create menu.
+
+### `POST /api/runorder-show`
+
+Opens a runorder window and then marks it as ready to play on the teleprompter. The dashboard sends this when a runorder node is double-clicked in the tree. This mimics Samvad's `getMultiTabs()` flow before sending the same ready message as the `readyToPlay()` button.
+
+Example request:
+
+```json
+{
+  "roID": "r6",
+  "roSlug": "Morning Bulletin"
+}
+```
+
+XML sent to Samvad:
+
+```http
+GET /rowindow6.html?userid=40&itemid=r6&itemslug=Morning+Bulletin&refresh=false
+```
+
+```xml
+<PCSyncPlay><ReadyToPlay><roID>6</roID></ReadyToPlay></PCSyncPlay>
+```
+
+Tree ids such as `r6` and `rDDNRCS_RO` are normalized to `6` and `DDNRCS_RO` before sending `ReadyToPlay`. Samvad replies with a `ReadyToPlay` frame that includes the runorder slug.
+
+### `POST /api/folder-create`
+
+Creates a new Samvad folder under a parent folder. Use `f1` to create a top-level folder under root.
+
+Example request:
+
+```json
+{
+  "name": "News Folder",
+  "parentID": "f1"
+}
+```
+
+XML sent to Samvad:
+
+```xml
+<PCSyncPlay><itemCreate><itemType>folder</itemType><itemSlug>News Folder</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
+```
+
+### `GET /api/folders`
+
+Refreshes the Samvad root folder and returns known folder/runorder tree items with their real ids.
+
+XML sent to Samvad:
+
+```xml
+<PCSyncPlay><itemOpen><itemID>f1</itemID><itemSlug>root</itemSlug><ExpandAll>false</ExpandAll></itemOpen></PCSyncPlay>
+```
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "requestedParentID": "f1",
+  "items": [
+    {
+      "itemID": "f7",
+      "itemSlug": "vimlesh",
+      "itemType": "folder",
+      "parentID": "f1"
+    },
+    {
+      "itemID": "rDDNRCS_RO",
+      "itemSlug": "0600 Hrs_2026-05-29",
+      "itemType": "runorder",
+      "parentID": "f1"
+    }
+  ],
+  "folders": [
+    {
+      "folderID": "f7",
+      "folderSlug": "vimlesh",
+      "parentID": "f1"
+    }
+  ]
+}
+```
+
+### `POST /api/item-delete`
+
+Deletes a folder or runorder from Samvad. The root folder `f1` is blocked by the Next.js app.
+
+Example request:
+
+```json
+{
+  "itemType": "runorder",
+  "itemID": "rDDNRCS_RO",
+  "itemSlug": "0600 Hrs_2026-05-29"
+}
+```
+
+XML sent to Samvad:
+
+```xml
+<PCSyncPlay><itemOperation><operation>Delete</operation><itemType>runorder</itemType><source><itemID>rDDNRCS_RO</itemID><itemSlug>0600 Hrs_2026-05-29</itemSlug></source><target><pID></pID></target></itemOperation></PCSyncPlay>
+```
+
 ## WebSocket Receive Examples
 
 ### Login
@@ -277,7 +438,7 @@ Parsed summary:
 ### Ready To Play
 
 ```xml
-<PCSyncPlay><ReadyToPlay><roID>DDNRCS_RO</roID><roSlug>0600 Hrs_2026-05-29</roSlug></ReadyToPlay></PCSyncPlay>
+<PCSyncPlay><ReadyToPlay><roID>6</roID><roSlug>0600 Hrs_2026-05-29</roSlug></ReadyToPlay></PCSyncPlay>
 ```
 
 ### Sync State
@@ -353,4 +514,16 @@ Parsed as:
 
 ```xml
 <PCSyncPlay><roCntrl><roID>DDNRCS_RO</roID><element_target><storyID>202605291050542</storyID><storySlug>uuuuu</storySlug><Block>false</Block></element_target><command>Play</command></roCntrl></PCSyncPlay>
+```
+
+### Create Runorder
+
+```xml
+<PCSyncPlay><itemCreate><itemType>runorder</itemType><itemSlug>Morning Bulletin</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
+```
+
+### Create Folder
+
+```xml
+<PCSyncPlay><itemCreate><itemType>folder</itemType><itemSlug>News Folder</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
 ```

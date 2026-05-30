@@ -5,12 +5,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 const refreshMs = 2000;
 const blankStoryHtml = '<p><font color="red">----</font></p>';
 const defaultTestStoryHtml = '<p><span style="color:#00ff66;background-color:#000000;">CUSTOM HTML RENDER TEST</span></p><p>This line was sent from the Next.js controller.</p><p><font color="red">----</font></p>';
-const defaultRunorderHtml = '<p><span style="color:#00ff66;">{{serial}}. {{title}}</span></p><p>Story ID: {{storyID}}</p><p><font color="red">----</font></p>';
 
 export default function Home() {
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
   const [storiesState, setStoriesState] = useState({ stories: [] });
+  const [foldersState, setFoldersState] = useState({ folders: [] });
   const [error, setError] = useState('');
   const [speedInput, setSpeedInput] = useState('');
   const [fontSizeInput, setFontSizeInput] = useState('');
@@ -18,7 +18,15 @@ export default function Home() {
   const [fgColorInput, setFgColorInput] = useState('#ffffff');
   const [alternateColorInput, setAlternateColorInput] = useState(false);
   const [customStoryHtml, setCustomStoryHtml] = useState(defaultTestStoryHtml);
-  const [runorderHtml, setRunorderHtml] = useState(defaultRunorderHtml);
+  const [runorderLines, setRunorderLines] = useState('');
+  const [newRunorderName, setNewRunorderName] = useState('');
+  const [newRunorderParent, setNewRunorderParent] = useState('f1');
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderParent, setNewFolderParent] = useState('f1');
+  const [expandedItems, setExpandedItems] = useState({ f1: true });
+  const [treeMenu, setTreeMenu] = useState(null);
+  const [pendingCreate, setPendingCreate] = useState(null);
+  const [pendingCreateName, setPendingCreateName] = useState('');
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
   const [colorStatus, setColorStatus] = useState('');
@@ -26,6 +34,9 @@ export default function Home() {
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
   const [storyContentStatus, setStoryContentStatus] = useState('');
   const [runorderContentStatus, setRunorderContentStatus] = useState('');
+  const [runorderShowStatus, setRunorderShowStatus] = useState('');
+  const [runorderCreateStatus, setRunorderCreateStatus] = useState('');
+  const [folderCreateStatus, setFolderCreateStatus] = useState('');
   const speedTouched = useRef(false);
   const fontSizeTouched = useRef(false);
   const latest = status?.latestMessage;
@@ -64,8 +75,28 @@ export default function Home() {
     }
   }
 
+  async function refreshFolders(parentID = 'f1', parentSlug = '') {
+    try {
+      const response = await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentID, parentSlug }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to load folders');
+      }
+
+      setFoldersState(result);
+    } catch (foldersError) {
+      setFoldersState({ folders: [], error: foldersError.message });
+    }
+  }
+
   useEffect(() => {
     refresh();
+    refreshFolders();
     const timer = setInterval(refresh, refreshMs);
     return () => clearInterval(timer);
   }, []);
@@ -161,9 +192,41 @@ export default function Home() {
 
       setSendStatus(`Live speed ${result.speed}`);
       setTimeout(refresh, 800);
+      return true;
     } catch (sendError) {
       setSendStatus(sendError.message);
+      return false;
     }
+  }
+
+  async function sendSpeedPreset(speed) {
+    speedTouched.current = false;
+    setSpeedInput(String(speed));
+    const sent = await sendSpeedValue(speed);
+
+    if (sent) {
+      sendControl('Play');
+    }
+  }
+
+  function getActiveSpeedValue() {
+    const activeSpeed = Number(speedInput || getCurrentSpeed(summary) || 0);
+    return Number.isFinite(activeSpeed) ? activeSpeed : 0;
+  }
+
+  function stepSpeed(direction) {
+    const nextSpeed = clampSpeed(roundToSpeedStep(getActiveSpeedValue() + direction * 0.25));
+    sendSpeedPreset(nextSpeed);
+  }
+
+  function handleSpeedWheel(event) {
+    event.preventDefault();
+    stepSpeed(event.deltaY < 0 ? 1 : -1);
+  }
+
+  function handleSpeedContextMenu(event) {
+    event.preventDefault();
+    togglePlayPause();
   }
 
   async function sendFontSizeValue(fontSize) {
@@ -318,7 +381,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode,
-          html: runorderHtml,
+          html: runorderLines,
         }),
       });
       const result = await response.json();
@@ -327,10 +390,223 @@ export default function Home() {
         throw new Error(result.error ?? `Failed to send ${mode} runorder`);
       }
 
-      setRunorderContentStatus(`Sent ${result.mode} to ${result.count} stories`);
+      const skipped = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
+      setRunorderContentStatus(`Sent ${result.mode} to ${result.count} stories${skipped}`);
       setTimeout(refresh, 1200);
     } catch (runorderError) {
       setRunorderContentStatus(runorderError.message);
+    }
+  }
+
+  async function loadRunorderLinesFile(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setRunorderContentStatus(`Loaded ${file.name}`);
+    setRunorderLines(await file.text());
+  }
+
+  async function createRunorder() {
+    const name = newRunorderName.trim();
+
+    if (!name) {
+      setRunorderCreateStatus('Enter a runorder name');
+      return;
+    }
+
+    setRunorderCreateStatus(`Creating ${name}...`);
+
+    try {
+      const response = await fetch('/api/runorder-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          parentID: newRunorderParent.trim() || 'f1',
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to create runorder');
+      }
+
+      setRunorderCreateStatus(`Created ${result.itemSlug} in ${result.parentID}`);
+      setNewRunorderName('');
+      setTimeout(() => refreshFolders(result.parentID), 700);
+      setTimeout(refresh, 1200);
+    } catch (createError) {
+      setRunorderCreateStatus(createError.message);
+    }
+  }
+
+  async function createFolder() {
+    const name = newFolderName.trim();
+
+    if (!name) {
+      setFolderCreateStatus('Enter a folder name');
+      return;
+    }
+
+    setFolderCreateStatus(`Creating ${name}...`);
+
+    try {
+      const response = await fetch('/api/folder-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          parentID: newFolderParent.trim() || 'f1',
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to create folder');
+      }
+
+      setFolderCreateStatus(`Created ${result.itemSlug} in ${result.parentID}`);
+      setNewFolderName('');
+      setTimeout(() => refreshFolders(result.parentID), 700);
+      setTimeout(refresh, 1200);
+    } catch (createError) {
+      setFolderCreateStatus(createError.message);
+    }
+  }
+
+  async function expandTreeFolder(item) {
+    setTreeMenu(null);
+    setExpandedItems((current) => ({
+      ...current,
+      [item.itemID]: !current[item.itemID],
+    }));
+
+    if (!expandedItems[item.itemID]) {
+      await refreshFolders(item.itemID, item.itemSlug);
+    }
+  }
+
+  function prepareCreateFromTree(kind, item) {
+    const folderID = item.itemType === 'folder' ? item.itemID : item.parentID || 'f1';
+    const folderName = item.itemType === 'folder' ? item.itemSlug : 'parent folder';
+    setPendingCreate({ kind, parentID: folderID, parentSlug: folderName });
+    setPendingCreateName('');
+    setTreeMenu(null);
+  }
+
+  async function submitPendingCreate() {
+    if (!pendingCreate || !pendingCreateName.trim()) {
+      return;
+    }
+
+    const kind = pendingCreate.kind;
+    const label = kind === 'folder' ? 'folder' : 'runorder';
+
+    try {
+      const response = await fetch(kind === 'folder' ? '/api/folder-create' : '/api/runorder-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: pendingCreateName.trim(),
+          parentID: pendingCreate.parentID,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? `Failed to create ${label}`);
+      }
+
+      const message = `Created ${result.itemSlug} in ${result.parentID}`;
+
+      if (kind === 'folder') {
+        setFolderCreateStatus(message);
+      } else {
+        setRunorderCreateStatus(message);
+      }
+
+      setPendingCreate(null);
+      setPendingCreateName('');
+      setTimeout(() => refreshFolders(result.parentID), 700);
+    } catch (createError) {
+      if (kind === 'folder') {
+        setFolderCreateStatus(createError.message);
+      } else {
+        setRunorderCreateStatus(createError.message);
+      }
+    }
+  }
+
+  async function deleteTreeItem(item) {
+    setTreeMenu(null);
+
+    if (item.itemID === 'f1') {
+      setFolderCreateStatus('Root folder cannot be deleted');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${item.itemType} "${item.itemSlug}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setFolderCreateStatus(`Deleting ${item.itemSlug}...`);
+
+    try {
+      const response = await fetch('/api/item-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemID: item.itemID,
+          itemSlug: item.itemSlug,
+          itemType: item.itemType,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to delete item');
+      }
+
+      setFolderCreateStatus(`Delete sent for ${result.itemSlug}`);
+      setTimeout(() => refreshFolders(item.parentID || 'f1'), 700);
+    } catch (deleteError) {
+      setFolderCreateStatus(deleteError.message);
+    }
+  }
+
+  async function showRunorderOnTeleprompter(item) {
+    if (item.itemType !== 'runorder') {
+      await expandTreeFolder(item);
+      return;
+    }
+
+    setRunorderShowStatus(`Sending ready for ${item.itemSlug}...`);
+
+    try {
+      const response = await fetch('/api/runorder-show', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roID: item.itemID,
+          roSlug: item.itemSlug,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to load runorder');
+      }
+
+      const storyCount = Number.isFinite(result.openedStories) ? ` (${result.openedStories} stories)` : '';
+      setRunorderShowStatus(`Ready ${result.roSlug || result.roID}${storyCount}`);
+      setTimeout(refresh, 1200);
+    } catch (showError) {
+      setRunorderShowStatus(showError.message);
     }
   }
 
@@ -348,13 +624,103 @@ export default function Home() {
         <button onClick={reconnectSocket} type="button">Reconnect</button>
       </section>
 
+      <RundownWorkspace
+        deleteTreeItem={deleteTreeItem}
+        expandedItems={expandedItems}
+        expandTreeFolder={expandTreeFolder}
+        folderCreateStatus={folderCreateStatus}
+        foldersState={foldersState}
+        pendingCreate={pendingCreate}
+        pendingCreateName={pendingCreateName}
+        playStory={playStory}
+        prepareCreateFromTree={prepareCreateFromTree}
+        refreshFolders={refreshFolders}
+        runorderCreateStatus={runorderCreateStatus}
+        runorderShowStatus={runorderShowStatus}
+        setPendingCreate={setPendingCreate}
+        setPendingCreateName={setPendingCreateName}
+        setTreeMenu={setTreeMenu}
+        showRunorderOnTeleprompter={showRunorderOnTeleprompter}
+        status={status}
+        storiesState={storiesState}
+        storyPlayStatus={storyPlayStatus}
+        submitPendingCreate={submitPendingCreate}
+        summary={summary}
+        treeMenu={treeMenu}
+      />
+
+      <section className="grid two top-control-grid">
+        <section className="panel">
+          <div
+            className="tele-speed-panel"
+            onContextMenu={handleSpeedContextMenu}
+            onWheel={handleSpeedWheel}
+          >
+            <div className="speed-button-row">
+              <button disabled={status?.state !== 'open'} onClick={() => sendSpeedPreset(1)} type="button">Start with Speed 1</button>
+              {[1.25, 1.5, 1.75, 2, 2.25, 2.5, 3, 4, 5, 6].map((speed) => (
+                <button disabled={status?.state !== 'open'} key={speed} onClick={() => sendSpeedPreset(speed)} type="button">
+                  {speed}
+                </button>
+              ))}
+              <button disabled={status?.state !== 'open'} onClick={() => stepSpeed(1)} type="button">++ .25</button>
+              <button disabled={status?.state !== 'open'} onClick={togglePlayPause} type="button">
+                {summary.sync?.PlayPause ? 'Pause' : 'Resume'}
+              </button>
+            </div>
+            <div className="tele-speed-slider">
+              <span>Speed: {Number.isFinite(selectedSpeed) ? selectedSpeed : getCurrentSpeed(summary) ?? 0}</span>
+              <input
+                aria-label="Speed value"
+                max="6"
+                min="0"
+                step="0.25"
+                type="range"
+                value={speedInput || '0'}
+                onChange={(event) => {
+                  speedTouched.current = true;
+                  setSpeedInput(event.target.value);
+                }}
+              />
+            </div>
+            <div className="tele-speed-hint">Right Click here in this area to Pause and Resume, Mouse Wheel for speed</div>
+            {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>Font Size</h2>
+            <span className="muted">Current font size: {getCurrentFontSize(summary) ?? 'Waiting'}</span>
+          </div>
+          <div className="speed-form">
+            <div className="speed-slider">
+              <input
+                aria-label="Font size value"
+                max="500"
+                min="40"
+                step="1"
+                type="range"
+                value={fontSizeInput || '80'}
+                onChange={(event) => {
+                  fontSizeTouched.current = true;
+                  setFontSizeInput(event.target.value);
+                }}
+              />
+              <output>{Number.isFinite(selectedFontSize) ? selectedFontSize : 80}</output>
+            </div>
+            {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
+          </div>
+        </section>
+      </section>
+
       {error ? <div className="alert">{error}</div> : null}
 
       <section className="grid metrics">
-        <Metric label="Socket" value={status?.url ?? 'ws://192.168.0.188:9095'} />
+        <Metric label="Socket" value={status?.url ?? 'Waiting'} />
         <Metric label="Frames Received" value={status?.messageCount ?? 0} />
         <Metric label="Latest Event" value={latest?.xmlShape?.event ?? 'Waiting'} />
-        <Metric label="Last Update" value={latest ? new Date(latest.receivedAt).toLocaleTimeString() : 'Waiting'} />
+        <Metric label="Last Update" value={latest ? new Date(latest.receivedAt).toString() : 'Waiting'} />
       </section>
 
       <section className="panel hero-panel">
@@ -392,107 +758,6 @@ export default function Home() {
             <Info label="Current Story ID" value={summary.story?.CurrentStoryId ?? 'Waiting'} />
             <Info label="Story Rundown" value={summary.story?.roID ?? 'Waiting'} />
           </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Stories</h2>
-          <span className="muted">
-            {storyPlayStatus || (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
-          </span>
-        </div>
-        <div className="table-wrap">
-          <table className="stories-table">
-            <thead>
-              <tr>
-                <th>Sr.no.</th>
-                <th>Title</th>
-                <th>Story ID</th>
-                <th>Content</th>
-                <th>Rendered HTML</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {storiesState.stories?.length ? (
-                storiesState.stories.map((story) => (
-                  <tr
-                    className={String(story.storyID) === String(summary.story?.CurrentStoryId) ? 'current-story' : ''}
-                    key={story.storyID}
-                    onDoubleClick={() => playStory(story)}
-                    title="Double-click to make current"
-                  >
-                    <td>{story.serial}</td>
-                    <td>{story.title}</td>
-                    <td>{story.storyID}</td>
-                    <td className="story-content">{story.content || '-'}</td>
-                    <td>
-                      <div
-                        className="render-preview"
-                        dangerouslySetInnerHTML={{ __html: story.htmlContent || '-' }}
-                      />
-                    </td>
-                    <td>{String(story.storyID) === String(summary.story?.CurrentStoryId) ? 'Current' : story.blocked ? 'Blocked' : ''}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6">{storiesState.error ?? 'Waiting for stories'}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Set Speed</h2>
-          <span className="muted">Current speed: {getCurrentSpeed(summary) ?? 'Waiting'}</span>
-        </div>
-        <div className="speed-form">
-          <div className="speed-slider">
-            <input
-              aria-label="Speed value"
-              max="20"
-              min="0.2"
-              step="0.1"
-              type="range"
-              value={speedInput || '0.2'}
-              onChange={(event) => {
-                speedTouched.current = true;
-                setSpeedInput(event.target.value);
-              }}
-            />
-            <output>{Number.isFinite(selectedSpeed) ? selectedSpeed.toFixed(1) : '0.2'}</output>
-          </div>
-          {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Font Size</h2>
-          <span className="muted">Current font size: {getCurrentFontSize(summary) ?? 'Waiting'}</span>
-        </div>
-        <div className="speed-form">
-          <div className="speed-slider">
-            <input
-              aria-label="Font size value"
-              max="500"
-              min="40"
-              step="1"
-              type="range"
-              value={fontSizeInput || '80'}
-              onChange={(event) => {
-                fontSizeTouched.current = true;
-                setFontSizeInput(event.target.value);
-              }}
-            />
-            <output>{Number.isFinite(selectedFontSize) ? selectedFontSize : 80}</output>
-          </div>
-          {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
         </div>
       </section>
 
@@ -583,19 +848,23 @@ export default function Home() {
           <span className="muted">Sends content to every story in the current runorder</span>
         </div>
         <div className="renderer-actions">
-          <button disabled={status?.state !== 'open'} onClick={() => sendRunorderContent('blank')} type="button">
-            Blank Whole Runorder
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendRunorderContent('custom')} type="button">
-            Send To Whole Runorder
+          <label className="file-button">
+            <span>Load Text File</span>
+            <input accept=".txt,text/plain" onChange={loadRunorderLinesFile} type="file" />
+          </label>
+          <button disabled={status?.state !== 'open' || !runorderLines.trim()} onClick={() => sendRunorderContent('lines')} type="button">
+            Send Lines To Runorder
           </button>
           {runorderContentStatus ? <span className="send-status">{runorderContentStatus}</span> : null}
         </div>
+        <label className="field-label" htmlFor="runorder-lines">One story per line</label>
         <textarea
-          aria-label="Runorder story HTML template"
-          className="custom-html"
-          value={runorderHtml}
-          onChange={(event) => setRunorderHtml(event.target.value)}
+          aria-label="Runorder lines"
+          className="custom-html runorder-lines"
+          id="runorder-lines"
+          placeholder="Paste scripts here: line 1 goes to story 1, line 2 goes to story 2..."
+          value={runorderLines}
+          onChange={(event) => setRunorderLines(event.target.value)}
         />
       </section>
 
@@ -647,6 +916,255 @@ function Info({ label, value, tone = '' }) {
   );
 }
 
+function RundownWorkspace({
+  deleteTreeItem,
+  expandedItems,
+  expandTreeFolder,
+  folderCreateStatus,
+  foldersState,
+  pendingCreate,
+  pendingCreateName,
+  playStory,
+  prepareCreateFromTree,
+  refreshFolders,
+  runorderCreateStatus,
+  runorderShowStatus,
+  setPendingCreate,
+  setPendingCreateName,
+  setTreeMenu,
+  showRunorderOnTeleprompter,
+  status,
+  storiesState,
+  storyPlayStatus,
+  submitPendingCreate,
+  summary,
+  treeMenu,
+}) {
+  const [selectedStoryID, setSelectedStoryID] = useState('');
+  const selectedStory = storiesState.stories?.find((story) => String(story.storyID) === String(selectedStoryID));
+
+  useEffect(() => {
+    if (selectedStoryID && !selectedStory) {
+      setSelectedStoryID('');
+    }
+  }, [selectedStoryID, selectedStory]);
+
+  useEffect(() => {
+    const currentStoryID = summary.story?.CurrentStoryId;
+
+    if (!currentStoryID || !storiesState.stories?.length) {
+      return;
+    }
+
+    const currentStory = storiesState.stories.find((story) => String(story.storyID) === String(currentStoryID));
+
+    if (currentStory) {
+      setSelectedStoryID(String(currentStory.storyID));
+    }
+  }, [summary.story?.CurrentStoryId, storiesState.stories]);
+
+  return (
+    <section className="rundown-workspace">
+      <div className="panel rundown-column">
+        <div className="panel-heading">
+          <h2>Tree</h2>
+          <button disabled={status?.state !== 'open'} onClick={() => refreshFolders('f1')} type="button">
+            Refresh Tree
+          </button>
+        </div>
+        <div className="tree-view workspace-tree" onClick={() => setTreeMenu(null)}>
+          {foldersState.items?.length ? (
+            <TreeBranch
+              expandedItems={expandedItems}
+              items={foldersState.items}
+              parentID=""
+              onContextMenu={(event, item) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setTreeMenu({
+                  item,
+                  x: event.clientX,
+                  y: event.clientY,
+                });
+              }}
+              onExpand={expandTreeFolder}
+              onShow={showRunorderOnTeleprompter}
+            />
+          ) : (
+            <p className="muted">{foldersState.error ?? 'No tree loaded'}</p>
+          )}
+          {treeMenu ? (
+            <div
+              className="tree-menu"
+              style={{ left: treeMenu.x, top: treeMenu.y }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button onClick={() => prepareCreateFromTree('folder', treeMenu.item)} type="button">
+                New Folder Here
+              </button>
+              <button onClick={() => prepareCreateFromTree('runorder', treeMenu.item)} type="button">
+                New Runorder Here
+              </button>
+              <button disabled={treeMenu.item.itemType !== 'runorder'} onClick={() => showRunorderOnTeleprompter(treeMenu.item)} type="button">
+                Load On Teleprompter
+              </button>
+              <button disabled={treeMenu.item.itemID === 'f1'} onClick={() => deleteTreeItem(treeMenu.item)} type="button">
+                Delete
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {pendingCreate ? (
+          <div className="tree-create-box">
+            <label>
+              <span>
+                New {pendingCreate.kind === 'folder' ? 'folder' : 'runorder'} in {pendingCreate.parentSlug} ({pendingCreate.parentID})
+              </span>
+              <input
+                autoFocus
+                maxLength="150"
+                placeholder={pendingCreate.kind === 'folder' ? 'Folder name' : 'Runorder name'}
+                type="text"
+                value={pendingCreateName}
+                onChange={(event) => setPendingCreateName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    submitPendingCreate();
+                  }
+                }}
+              />
+            </label>
+            <button disabled={status?.state !== 'open' || !pendingCreateName.trim()} onClick={submitPendingCreate} type="button">
+              Create
+            </button>
+            <button
+              onClick={() => {
+                setPendingCreate(null);
+                setPendingCreateName('');
+              }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
+        {runorderShowStatus || folderCreateStatus || runorderCreateStatus ? (
+          <span className="send-status">{runorderShowStatus || folderCreateStatus || runorderCreateStatus}</span>
+        ) : null}
+      </div>
+
+      <div className="panel rundown-column">
+        <div className="panel-heading">
+          <h2>Stories</h2>
+          <span className="muted">
+            {storyPlayStatus || (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
+          </span>
+        </div>
+        <div className="story-slug-list" aria-label="Story slug list">
+          {storiesState.stories?.length ? (
+            storiesState.stories.map((story) => {
+              const isSelected = String(story.storyID) === String(selectedStoryID);
+              const isCurrent = String(story.storyID) === String(summary.story?.CurrentStoryId);
+
+              return (
+                <button
+                  className={`story-slug-button ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}`}
+                  key={story.storyID}
+                  onClick={() => setSelectedStoryID(story.storyID)}
+                  onDoubleClick={() => playStory(story)}
+                  title="Click to view content, double-click to make current"
+                  type="button"
+                >
+                  <span className="story-number">{story.serial}</span>
+                  <span className="story-slug">{story.title || story.storyID}</span>
+                </button>
+              );
+            })
+          ) : (
+            <div className="story-empty">{storiesState.error ?? 'Waiting for stories'}</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel rundown-column">
+        <div className="panel-heading">
+          <h2>Content</h2>
+          <span className="muted">{selectedStory ? selectedStory.storyID : 'Select a story'}</span>
+        </div>
+        <div className="story-reader">
+          {selectedStory ? (
+            <>
+              <div className="story-reader-title">
+                <span>{selectedStory.serial}</span>
+                <strong>{selectedStory.title || selectedStory.storyID}</strong>
+              </div>
+              <div className="story-reader-content">{selectedStory.content || '-'}</div>
+            </>
+          ) : (
+            <div className="story-reader-empty">Click a story slug to view content</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TreeBranch({ expandedItems, items, parentID, onContextMenu, onExpand, onShow }) {
+  const children = items.filter((item) => String(item.parentID ?? '') === String(parentID ?? ''));
+
+  if (!children.length) {
+    return null;
+  }
+
+  return (
+    <ul className="tree-branch">
+      {children.map((item) => {
+        const isFolder = item.itemType === 'folder';
+        const isExpanded = expandedItems[item.itemID];
+
+        return (
+          <li key={item.itemID}>
+            <div
+              className={`tree-node ${isFolder ? 'folder' : 'runorder'}`}
+              onDoubleClick={() => onShow(item)}
+              onContextMenu={(event) => onContextMenu(event, item)}
+            >
+              <button
+                className="tree-toggle"
+                disabled={!isFolder}
+                onClick={() => isFolder ? onExpand(item) : onShow(item)}
+                type="button"
+              >
+                {isFolder ? (isExpanded ? '-' : '+') : ''}
+              </button>
+              <button
+                className="tree-label"
+                onClick={() => isFolder ? onExpand(item) : undefined}
+                onDoubleClick={() => onShow(item)}
+                type="button"
+              >
+                <span>{isFolder ? 'Folder' : 'RO'}</span>
+                {item.itemSlug}
+              </button>
+              <code>{item.itemID}</code>
+            </div>
+            {isFolder && isExpanded ? (
+              <TreeBranch
+                expandedItems={expandedItems}
+                items={items}
+                parentID={item.itemID}
+                onContextMenu={onContextMenu}
+                onExpand={onExpand}
+                onShow={onShow}
+              />
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function buildSummary(messages) {
   return messages.reduce((summary, message) => {
     const body = message.xml?.PCSyncPlay;
@@ -685,6 +1203,14 @@ function formatBool(value) {
 
 function getCurrentSpeed(summary) {
   return summary.speed?.CurrentSpeed ?? summary.speed?.Speed ?? summary.sync?.Speed;
+}
+
+function clampSpeed(speed) {
+  return Math.min(6, Math.max(0.159, speed));
+}
+
+function roundToSpeedStep(speed) {
+  return Math.round(speed * 4) / 4;
 }
 
 function getCurrentFontSize(summary) {

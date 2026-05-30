@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import { parseSamvadFrame } from '../lib/samvad-parser.js';
 
-const url = process.env.SAMVAD_WS_URL ?? 'ws://192.168.0.188:9095';
+const url = getSamvadWsUrl();
 const durationMs = Number(process.env.INSPECT_MS ?? 20000);
 
 console.log(`Connecting to ${url}`);
@@ -31,3 +31,18 @@ setTimeout(() => {
   console.log(`Finished. Messages received: ${count}`);
   ws.close();
 }, durationMs);
+
+function getSamvadWsUrl() {
+  if (process.env.SAMVAD_WS_URL) {
+    return process.env.SAMVAD_WS_URL;
+  }
+
+  const host = process.env.SAMVAD_HOST;
+  const port = process.env.SAMVAD_WS_PORT;
+
+  if (host && port) {
+    return `ws://${host}:${port}`;
+  }
+
+  throw new Error('Set SAMVAD_WS_URL or SAMVAD_HOST and SAMVAD_WS_PORT');
+}
