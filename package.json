@@ -4,9 +4,9 @@
   "type": "module",
   "main": "next.config.mjs",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next-with-env-port.mjs dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/next-with-env-port.mjs start",
     "inspect:ws": "node scripts/inspect-ws.mjs"
   },
   "keywords": [],

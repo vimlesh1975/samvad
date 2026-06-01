@@ -35,7 +35,7 @@ Optional environment variables:
 - `SAMVAD_HTTP_URL`
 - `SAMVAD_WS_URL`
 - `INSPECT_MS`, default `20000`
-- `PORT`, default `3000`
+- `PORT`, default `3000`. `npm run dev` and `npm run start` read this from `.env`.
 - `MAX_MESSAGES`, default `100`
 
 ## API Methods

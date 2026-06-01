@@ -390,8 +390,12 @@ export default function Home() {
         throw new Error(result.error ?? `Failed to send ${mode} runorder`);
       }
 
-      const skipped = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
-      setRunorderContentStatus(`Sent ${result.mode} to ${result.count} stories${skipped}`);
+      if (result.replaced) {
+        setRunorderContentStatus(`Replaced runorder: deleted ${result.deletedCount}, added ${result.count}`);
+      } else {
+        const skipped = result.skippedCount ? `, skipped ${result.skippedCount}` : '';
+        setRunorderContentStatus(`Sent ${result.mode} to ${result.count} stories${skipped}`);
+      }
       setTimeout(refresh, 1200);
     } catch (runorderError) {
       setRunorderContentStatus(runorderError.message);
@@ -613,9 +617,9 @@ export default function Home() {
   return (
     <main className="shell">
       <section className="topbar">
-        <div>
-          <p className="eyebrow">Samvad Teleprompter</p>
-          <h1>WebSocket Inspector</h1>
+        <div className="header-title">
+          <span>Samvad Teleprompter</span>
+          <span>WebSocket Inspector</span>
         </div>
         <div className={`status-pill ${status?.state === 'open' ? 'open' : ''}`}>
           <span />
