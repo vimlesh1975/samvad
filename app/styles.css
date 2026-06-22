@@ -579,6 +579,27 @@ h2 {
   text-align: center;
 }
 
+.font-family-field {
+  display: grid;
+  gap: 4px;
+  min-width: 230px;
+}
+
+.font-family-field span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.font-family-field select {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
 .control-row {
   align-items: center;
   display: flex;

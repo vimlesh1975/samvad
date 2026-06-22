@@ -4,7 +4,7 @@ Small Next.js JavaScript project that connects to the Samvad teleprompter WebSoc
 
 Default targets:
 
-- Web UI: `http://localhost:3000/`
+- Web UI: `http://localhost:$PORT/`
 - Samvad WebSocket: configured with `SAMVAD_WS_URL` or `SAMVAD_HOST` + `SAMVAD_WS_PORT`
 - Samvad source UI: configured with `SAMVAD_HTTP_URL` or `SAMVAD_HOST` + `SAMVAD_HTTP_PORT`
 
@@ -16,10 +16,10 @@ npm run dev
 
 Then open:
 
-- `http://localhost:3000/` for the dashboard
-- `http://localhost:3000/api/status` for connection status and latest parsed frame
-- `http://localhost:3000/api/messages` for recent parsed frames
-- `http://localhost:3000/api/stories` for the current rundown story table
+- `http://localhost:$PORT/` for the dashboard
+- `http://localhost:$PORT/api/status` for connection status and latest parsed frame
+- `http://localhost:$PORT/api/messages` for recent parsed frames
+- `http://localhost:$PORT/api/stories` for the current rundown story table
 
 ## One-off WebSocket capture
 
@@ -34,9 +34,13 @@ Optional environment variables:
 - `SAMVAD_WS_PORT`
 - `SAMVAD_HTTP_URL`
 - `SAMVAD_WS_URL`
+- `SAMVAD_USERNAME`
+- `SAMVAD_PASSWORD`
 - `INSPECT_MS`, default `20000`
 - `PORT`, default `3000`. `npm run dev` and `npm run start` read this from `.env`.
 - `MAX_MESSAGES`, default `100`
+
+The controller logs in automatically whenever its WebSocket connects, including after the Samvad device restarts. If Samvad reports a stale active session, the controller requests session takeover and then opens the root folder.
 
 ## API Methods
 
@@ -186,6 +190,20 @@ Example response:
   "xml": "<PCSyncPlay><FontSize><roID>DDNRCS_RO</roID><FontSize>96</FontSize></FontSize></PCSyncPlay>"
 }
 ```
+
+### `POST /api/font-family`
+
+Applies a font family to every story in the current runorder while preserving the story text and other SMVD formatting.
+
+```json
+{
+  "fontFamily": "Mangal"
+}
+```
+
+### `GET /api/system-fonts`
+
+Returns all font families installed on the machine running the Next.js server. These populate the whole-runorder font combo.
 
 ### `POST /api/control`
 

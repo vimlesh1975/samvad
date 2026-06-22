@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const refreshMs = 2000;
+const fallbackFonts = ['Arial', 'Times New Roman'];
 const blankStoryHtml = '<p><font color="red">----</font></p>';
 const defaultTestStoryHtml = '<p><span style="color:#00ff66;background-color:#000000;">CUSTOM HTML RENDER TEST</span></p><p>This line was sent from the Next.js controller.</p><p><font color="red">----</font></p>';
 
@@ -14,6 +15,8 @@ export default function Home() {
   const [error, setError] = useState('');
   const [speedInput, setSpeedInput] = useState('');
   const [fontSizeInput, setFontSizeInput] = useState('');
+  const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
+  const [systemFonts, setSystemFonts] = useState(fallbackFonts);
   const [bgColorInput, setBgColorInput] = useState('#050505');
   const [fgColorInput, setFgColorInput] = useState('#ffffff');
   const [alternateColorInput, setAlternateColorInput] = useState(false);
@@ -29,6 +32,7 @@ export default function Home() {
   const [pendingCreateName, setPendingCreateName] = useState('');
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
+  const [fontFamilyStatus, setFontFamilyStatus] = useState('');
   const [colorStatus, setColorStatus] = useState('');
   const [controlStatus, setControlStatus] = useState('');
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
@@ -97,9 +101,28 @@ export default function Home() {
   useEffect(() => {
     refresh();
     refreshFolders();
+    loadSystemFonts();
     const timer = setInterval(refresh, refreshMs);
     return () => clearInterval(timer);
   }, []);
+
+  async function loadSystemFonts() {
+    try {
+      const response = await fetch('/api/system-fonts', { cache: 'no-store' });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok || !result.fonts?.length) {
+        throw new Error(result.error ?? 'No system fonts found');
+      }
+
+      setSystemFonts(result.fonts);
+      if (!result.fonts.includes(fontFamilyInput)) {
+        setFontFamilyInput(result.fonts[0]);
+      }
+    } catch (fontError) {
+      setFontFamilyStatus(fontError.message);
+    }
+  }
 
   useEffect(() => {
     if (!summary.story?.roID && !summary.readyToPlay?.roID) {
@@ -248,6 +271,29 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (fontSizeError) {
       setFontSizeStatus(fontSizeError.message);
+    }
+  }
+
+  async function sendRunorderFontFamily(fontFamily) {
+    setFontFamilyInput(fontFamily);
+    setFontFamilyStatus('Updating whole runorder...');
+
+    try {
+      const response = await fetch('/api/font-family', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fontFamily }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to apply font family');
+      }
+
+      setFontFamilyStatus(`${result.fontFamily}: ${result.count} stories updated`);
+      setTimeout(refresh, 800);
+    } catch (fontFamilyError) {
+      setFontFamilyStatus(fontFamilyError.message);
     }
   }
 
@@ -694,7 +740,7 @@ export default function Home() {
 
         <section className="panel">
           <div className="panel-heading">
-            <h2>Font Size</h2>
+            <h2>Font Size &amp; Family</h2>
             <span className="muted">Current font size: {getCurrentFontSize(summary) ?? 'Waiting'}</span>
           </div>
           <div className="speed-form">
@@ -713,7 +759,22 @@ export default function Home() {
               />
               <output>{Number.isFinite(selectedFontSize) ? selectedFontSize : 80}</output>
             </div>
+            <label className="font-family-field">
+              <span>Whole runorder font ({systemFonts.length} installed)</span>
+              <select
+                disabled={status?.state !== 'open'}
+                value={fontFamilyInput}
+                onChange={(event) => sendRunorderFontFamily(event.target.value)}
+              >
+                {systemFonts.map((font) => (
+                  <option key={font} value={font} style={{ fontFamily: font }}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </label>
             {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
+            {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
           </div>
         </section>
       </section>
