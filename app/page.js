@@ -573,20 +573,7 @@ export default function Home() {
       <section className="topbar">
       </section>
 
-      <section className="panel">
-        <div className="control-row">
-          <button disabled={status?.state !== 'open'} onClick={togglePlayPause} type="button">
-            {summary.sync?.PlayPause ? 'Pause' : 'Play'}
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Previous')} type="button">
-            Previous Story
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Skip')} type="button">
-            Next Story
-          </button>
-          {controlStatus ? <span className="send-status">{controlStatus}</span> : null}
-        </div>
-      </section>
+
 
       <RundownWorkspace
         deleteTreeItem={deleteTreeItem}
@@ -967,7 +954,7 @@ function RundownWorkspace({
             <span className="muted">
               {keyboardStoryNumber
                 ? `Go to story ${keyboardStoryNumber}`
-                : storyPlayStatus || (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
+                : (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
             </span>
             <button disabled={!storiesState.stories?.length || status?.state !== 'open'} onClick={() => moveStory(-1)} type="button">
               Previous
