@@ -705,6 +705,7 @@ export default function Home() {
         expandTreeFolder={expandTreeFolder}
         folderCreateStatus={folderCreateStatus}
         foldersState={foldersState}
+        fontFamilyInput={fontFamilyInput}
         pendingCreate={pendingCreate}
         pendingCreateName={pendingCreateName}
         playStory={playStory}
@@ -812,7 +813,7 @@ export default function Home() {
                 type="checkbox"
                 onChange={(event) => sendRunorderDirection(event.target.checked)}
               />
-              <span>Right align</span>
+              <span>Urdu RTL</span>
             </label>
             {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
             {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
@@ -1029,6 +1030,7 @@ function RundownWorkspace({
   expandTreeFolder,
   folderCreateStatus,
   foldersState,
+  fontFamilyInput,
   pendingCreate,
   pendingCreateName,
   playStory,
@@ -1312,11 +1314,15 @@ function RundownWorkspace({
         <div className="story-reader">
           {selectedStory ? (
             <>
-              <div className="story-reader-title">
+              <div className="story-reader-title" style={{ fontFamily: fontFamilyInput }}>
                 <span>{selectedStory.serial}</span>
                 <strong>{selectedStory.title || selectedStory.storyID}</strong>
               </div>
-              <div className={`story-reader-content ${rtlInput ? 'rtl' : ''}`} dir={rtlInput ? 'rtl' : 'ltr'}>
+              <div
+                className={`story-reader-content ${rtlInput ? 'rtl' : ''}`}
+                dir={rtlInput ? 'rtl' : 'ltr'}
+                style={{ fontFamily: fontFamilyInput }}
+              >
                 {selectedStory.content || '-'}
               </div>
             </>

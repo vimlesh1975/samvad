@@ -207,9 +207,7 @@ Returns all font families installed on the machine running the Next.js server. T
 
 ### `POST /api/text-direction`
 
-Right-aligns every story line in the current runorder for teleprompter display. Samvad does not render HTML/CSS alignment over this WebSocket path, so the app uses leading spaces with an invisible marker and removes that padding again when `rtl` is set to `false`.
-
-Set `SAMVAD_RIGHT_ALIGN_COLUMNS` in `.env` to tune how far right the text moves. The default is `60`.
+Converts every story line in the current runorder for Urdu-style RTL teleprompter display. Samvad does not render HTML/CSS direction over this WebSocket path, so the app shapes Arabic/Urdu characters into presentation forms and sends the line in visual order. Sending `rtl: false` removes that visual-order conversion where the app marker is present.
 
 ```json
 {
