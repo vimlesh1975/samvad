@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const refreshMs = 2000;
 const fallbackFonts = ['Arial', 'Times New Roman'];
-const blankStoryHtml = '<p><font color="red">----</font></p>';
-const defaultTestStoryHtml = '<p><span style="color:#00ff66;background-color:#000000;">CUSTOM HTML RENDER TEST</span></p><p>This line was sent from the Next.js controller.</p><p><font color="red">----</font></p>';
 
 export default function Home() {
   const [status, setStatus] = useState(null);
@@ -17,10 +15,6 @@ export default function Home() {
   const [fontSizeInput, setFontSizeInput] = useState('');
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
-  const [bgColorInput, setBgColorInput] = useState('#050505');
-  const [fgColorInput, setFgColorInput] = useState('#ffffff');
-  const [alternateColorInput, setAlternateColorInput] = useState(false);
-  const [customStoryHtml, setCustomStoryHtml] = useState(defaultTestStoryHtml);
   const [runorderLines, setRunorderLines] = useState('');
   const [newRunorderName, setNewRunorderName] = useState('');
   const [newRunorderParent, setNewRunorderParent] = useState('f1');
@@ -33,10 +27,8 @@ export default function Home() {
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
   const [fontFamilyStatus, setFontFamilyStatus] = useState('');
-  const [colorStatus, setColorStatus] = useState('');
   const [controlStatus, setControlStatus] = useState('');
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
-  const [storyContentStatus, setStoryContentStatus] = useState('');
   const [runorderContentStatus, setRunorderContentStatus] = useState('');
   const [runorderShowStatus, setRunorderShowStatus] = useState('');
   const [runorderCreateStatus, setRunorderCreateStatus] = useState('');
@@ -184,20 +176,6 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [fontSizeInput, status?.state]);
 
-  useEffect(() => {
-    if (summary.sync?.BgColor && isHexColor(summary.sync.BgColor)) {
-      setBgColorInput(summary.sync.BgColor);
-    }
-
-    if (summary.sync?.FgColor && isHexColor(summary.sync.FgColor)) {
-      setFgColorInput(summary.sync.FgColor);
-    }
-
-    if (typeof summary.sync?.AlternateColorStatus === 'boolean') {
-      setAlternateColorInput(summary.sync.AlternateColorStatus);
-    }
-  }, [summary.sync?.BgColor, summary.sync?.FgColor]);
-
   async function sendSpeedValue(speed) {
     setSendStatus('Sending...');
 
@@ -297,54 +275,6 @@ export default function Home() {
     }
   }
 
-  async function sendColors() {
-    setColorStatus('Sending test Sync...');
-
-    try {
-      const response = await fetch('/api/colors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bgColor: bgColorInput,
-          fgColor: fgColorInput,
-        }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? 'Failed to send colors');
-      }
-
-      setColorStatus(`Sent ${result.fgColor} on ${result.bgColor}`);
-      setTimeout(refresh, 800);
-    } catch (colorError) {
-      setColorStatus(colorError.message);
-    }
-  }
-
-  async function sendAlternateColor(enabled) {
-    setColorStatus('Sending alternate color...');
-
-    try {
-      const response = await fetch('/api/alternate-color', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? 'Failed to send alternate color');
-      }
-
-      setAlternateColorInput(result.enabled);
-      setColorStatus(`Alternate color ${result.enabled ? 'on' : 'off'}`);
-      setTimeout(refresh, 800);
-    } catch (colorError) {
-      setColorStatus(colorError.message);
-    }
-  }
-
   async function sendControl(command) {
     setControlStatus(`Sending ${command}...`);
 
@@ -393,28 +323,6 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (storyError) {
       setStoryPlayStatus(storyError.message);
-    }
-  }
-
-  async function sendStoryContent(html, label) {
-    setStoryContentStatus(`Sending ${label}...`);
-
-    try {
-      const response = await fetch('/api/story-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? `Failed to send ${label}`);
-      }
-
-      setStoryContentStatus(`Sent ${label} to story ${result.storyID}`);
-      setTimeout(refresh, 800);
-    } catch (storyContentError) {
-      setStoryContentStatus(storyContentError.message);
     }
   }
 
@@ -788,91 +696,6 @@ export default function Home() {
 
       {error ? <div className="alert">{error}</div> : null}
 
-      <section className="grid metrics">
-        <Metric label="Socket" value={status?.url ?? 'Waiting'} />
-        <Metric label="Frames Received" value={status?.messageCount ?? 0} />
-        <Metric label="Latest Event" value={latest?.xmlShape?.event ?? 'Waiting'} />
-        <Metric label="Last Update" value={latest ? new Date(latest.receivedAt).toString() : 'Waiting'} />
-      </section>
-
-      <section className="panel hero-panel">
-        <div>
-          <p className="eyebrow">Current Rundown</p>
-          <h2>{summary.readyToPlay?.roSlug ?? 'Waiting for rundown'}</h2>
-          <p className="muted">{summary.readyToPlay?.roID ?? 'No rundown id received yet'}</p>
-        </div>
-        <button onClick={refresh} type="button">Refresh</button>
-      </section>
-
-      <section className="grid two">
-        <div className="panel">
-          <div className="panel-heading">
-            <h2>Teleprompter State</h2>
-          </div>
-          <div className="summary-grid">
-            <Info label="Playing" value={formatBool(summary.sync?.PlayPause)} />
-            <Info label="Stopped" value={formatBool(summary.sync?.Stop)} />
-            <Info label="Finished" value={formatBool(summary.sync?.Finish)} />
-            <Info label="Mirror" value={formatBool(summary.sync?.Mirror)} />
-            <Info label="Blank" value={formatBool(summary.sync?.Blank)} />
-            <Info label="Speed" value={getCurrentSpeed(summary) ?? 'Waiting'} />
-            <Info label="Font Size" value={getCurrentFontSize(summary) ?? 'Waiting'} />
-            <Info label="Colors" value={summary.sync ? `${summary.sync.FgColor} on ${summary.sync.BgColor}` : 'Waiting'} />
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-heading">
-            <h2>Story</h2>
-          </div>
-          <div className="summary-grid">
-            <Info label="Message ID" value={summary.story?.messageID ?? 'Waiting'} />
-            <Info label="Current Story ID" value={summary.story?.CurrentStoryId ?? 'Waiting'} />
-            <Info label="Story Rundown" value={summary.story?.roID ?? 'Waiting'} />
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Colors</h2>
-          <span className="muted">Experimental Sync color test</span>
-        </div>
-        <div className="color-form">
-          <label className="toggle-label">
-            <input
-              checked={alternateColorInput}
-              disabled={status?.state !== 'open'}
-              type="checkbox"
-              onChange={(event) => sendAlternateColor(event.target.checked)}
-            />
-            <span>Alternate Color</span>
-          </label>
-          <label>
-            <span>Background</span>
-            <input
-              aria-label="Background color"
-              type="color"
-              value={bgColorInput}
-              onChange={(event) => setBgColorInput(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>Font</span>
-            <input
-              aria-label="Font color"
-              type="color"
-              value={fgColorInput}
-              onChange={(event) => setFgColorInput(event.target.value)}
-            />
-          </label>
-          <button disabled={status?.state !== 'open'} onClick={sendColors} type="button">
-            Try Colors
-          </button>
-          {colorStatus ? <span className="send-status">{colorStatus}</span> : null}
-        </div>
-      </section>
-
       <section className="panel">
         <div className="panel-heading">
           <h2>Playback</h2>
@@ -890,28 +713,6 @@ export default function Home() {
           </button>
           {controlStatus ? <span className="send-status">{controlStatus}</span> : null}
         </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Renderer Test</h2>
-          <span className="muted">Converts HTML input to Samvad story format</span>
-        </div>
-        <div className="renderer-actions">
-          <button disabled={status?.state !== 'open'} onClick={() => sendStoryContent(blankStoryHtml, 'blank renderer')} type="button">
-            Blank Renderer
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendStoryContent(customStoryHtml, 'custom content')} type="button">
-            Send Custom Content
-          </button>
-          {storyContentStatus ? <span className="send-status">{storyContentStatus}</span> : null}
-        </div>
-        <textarea
-          aria-label="Custom story HTML"
-          className="custom-html"
-          value={customStoryHtml}
-          onChange={(event) => setCustomStoryHtml(event.target.value)}
-        />
       </section>
 
       <section className="panel">
