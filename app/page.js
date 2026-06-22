@@ -17,7 +17,6 @@ export default function Home() {
   const [fontSizeInput, setFontSizeInput] = useState('');
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
-  const [rtlInput, setRtlInput] = useState(false);
   const [bgColorInput, setBgColorInput] = useState('#050505');
   const [fgColorInput, setFgColorInput] = useState('#ffffff');
   const [alternateColorInput, setAlternateColorInput] = useState(false);
@@ -34,7 +33,6 @@ export default function Home() {
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
   const [fontFamilyStatus, setFontFamilyStatus] = useState('');
-  const [directionStatus, setDirectionStatus] = useState('');
   const [colorStatus, setColorStatus] = useState('');
   const [controlStatus, setControlStatus] = useState('');
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
@@ -296,29 +294,6 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (fontFamilyError) {
       setFontFamilyStatus(fontFamilyError.message);
-    }
-  }
-
-  async function sendRunorderDirection(rtl) {
-    setRtlInput(rtl);
-    setDirectionStatus(`Applying ${rtl ? 'right to left' : 'left to right'}...`);
-
-    try {
-      const response = await fetch('/api/text-direction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rtl }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? 'Failed to apply text direction');
-      }
-
-      setDirectionStatus(`${result.direction.toUpperCase()}: ${result.count} stories updated`);
-      setTimeout(refresh, 800);
-    } catch (directionError) {
-      setDirectionStatus(directionError.message);
     }
   }
 
@@ -711,7 +686,6 @@ export default function Home() {
         playStory={playStory}
         prepareCreateFromTree={prepareCreateFromTree}
         refreshFolders={refreshFolders}
-        rtlInput={rtlInput}
         runorderCreateStatus={runorderCreateStatus}
         runorderShowStatus={runorderShowStatus}
         setPendingCreate={setPendingCreate}
@@ -806,18 +780,8 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <label className="rtl-field">
-              <input
-                checked={rtlInput}
-                disabled={status?.state !== 'open'}
-                type="checkbox"
-                onChange={(event) => sendRunorderDirection(event.target.checked)}
-              />
-              <span>Urdu RTL</span>
-            </label>
             {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
             {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
-            {directionStatus ? <span className="send-status">{directionStatus}</span> : null}
           </div>
         </section>
       </section>
@@ -1036,7 +1000,6 @@ function RundownWorkspace({
   playStory,
   prepareCreateFromTree,
   refreshFolders,
-  rtlInput,
   runorderCreateStatus,
   runorderShowStatus,
   setPendingCreate,
@@ -1319,8 +1282,8 @@ function RundownWorkspace({
                 <strong>{selectedStory.title || selectedStory.storyID}</strong>
               </div>
               <div
-                className={`story-reader-content ${rtlInput ? 'rtl' : ''}`}
-                dir={rtlInput ? 'rtl' : 'ltr'}
+                className="story-reader-content"
+                dir="ltr"
                 style={{ fontFamily: fontFamilyInput }}
               >
                 {selectedStory.content || '-'}
