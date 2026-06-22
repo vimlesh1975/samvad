@@ -571,15 +571,21 @@ export default function Home() {
   return (
     <main className="shell">
       <section className="topbar">
-        <div className="header-title">
-          <span>Samvad Teleprompter</span>
-          <span>WebSocket Inspector</span>
+      </section>
+
+      <section className="panel">
+        <div className="control-row">
+          <button disabled={status?.state !== 'open'} onClick={togglePlayPause} type="button">
+            {summary.sync?.PlayPause ? 'Pause' : 'Play'}
+          </button>
+          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Previous')} type="button">
+            Previous Story
+          </button>
+          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Skip')} type="button">
+            Next Story
+          </button>
+          {controlStatus ? <span className="send-status">{controlStatus}</span> : null}
         </div>
-        <div className={`status-pill ${status?.state === 'open' ? 'open' : ''}`}>
-          <span />
-          {status?.state ?? 'loading'}
-        </div>
-        <button onClick={reconnectSocket} type="button">Reconnect</button>
       </section>
 
       <RundownWorkspace
@@ -654,28 +660,20 @@ export default function Home() {
         </section>
 
         <section className="panel">
-          <div className="panel-heading">
-            <h2>Font Size &amp; Family</h2>
-            <span className="muted">Current font size: {getCurrentFontSize(summary) ?? 'Waiting'}</span>
-          </div>
-          <div className="speed-form">
-            <div className="speed-slider">
+          <div className="speed-form" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'nowrap' }}>
               <input
-                aria-label="Font size value"
+                aria-label="Font size number"
                 max="500"
                 min="40"
                 step="1"
-                type="range"
-                value={fontSizeInput || '80'}
+                type="number"
+                value={Number.isFinite(selectedFontSize) ? selectedFontSize : 80}
                 onChange={(event) => {
                   fontSizeTouched.current = true;
                   setFontSizeInput(event.target.value);
                 }}
+                style={{ width: '80px' }}
               />
-              <output>{Number.isFinite(selectedFontSize) ? selectedFontSize : 80}</output>
-            </div>
-            <label className="font-family-field">
-              <span>Whole runorder font ({systemFonts.length} installed)</span>
               <select
                 disabled={status?.state !== 'open'}
                 value={fontFamilyInput}
@@ -687,86 +685,28 @@ export default function Home() {
                   </option>
                 ))}
               </select>
-            </label>
             {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
             {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
+          </div>
+          <div className="renderer-actions" style={{ marginTop: '12px' }}>
+            <label className="file-button">
+              <span>Load Text File</span>
+              <input accept=".txt,text/plain" onChange={loadRunorderLinesFile} type="file" />
+            </label>
+            <button disabled={status?.state !== 'open' || !runorderLines.trim()} onClick={() => sendRunorderContent('lines')} type="button">
+              Send Lines To Runorder
+            </button>
+            {runorderContentStatus ? <span className="send-status">{runorderContentStatus}</span> : null}
           </div>
         </section>
       </section>
 
       {error ? <div className="alert">{error}</div> : null}
 
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Playback</h2>
-          <span className="muted">Current state: {summary.sync?.PlayPause ? 'Playing' : 'Paused or stopped'}</span>
-        </div>
-        <div className="control-row">
-          <button disabled={status?.state !== 'open'} onClick={togglePlayPause} type="button">
-            {summary.sync?.PlayPause ? 'Pause' : 'Play'}
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Previous')} type="button">
-            Previous Story
-          </button>
-          <button disabled={status?.state !== 'open'} onClick={() => sendControl('Skip')} type="button">
-            Next Story
-          </button>
-          {controlStatus ? <span className="send-status">{controlStatus}</span> : null}
-        </div>
-      </section>
 
-      <section className="panel">
-        <div className="panel-heading">
-          <h2>Runorder Content</h2>
-          <span className="muted">Sends content to every story in the current runorder</span>
-        </div>
-        <div className="renderer-actions">
-          <label className="file-button">
-            <span>Load Text File</span>
-            <input accept=".txt,text/plain" onChange={loadRunorderLinesFile} type="file" />
-          </label>
-          <button disabled={status?.state !== 'open' || !runorderLines.trim()} onClick={() => sendRunorderContent('lines')} type="button">
-            Send Lines To Runorder
-          </button>
-          {runorderContentStatus ? <span className="send-status">{runorderContentStatus}</span> : null}
-        </div>
-        <label className="field-label" htmlFor="runorder-lines">One story per line</label>
-        <textarea
-          aria-label="Runorder lines"
-          className="custom-html runorder-lines"
-          id="runorder-lines"
-          placeholder="Paste scripts here: line 1 goes to story 1, line 2 goes to story 2..."
-          value={runorderLines}
-          onChange={(event) => setRunorderLines(event.target.value)}
-        />
-      </section>
 
-      <section className="grid two">
-        <div className="panel">
-          <div className="panel-heading">
-            <h2>Connectivity</h2>
-          </div>
-          <div className="summary-grid">
-            <Info label="Samvad" value={formatBool(summary.samvadConnectivity?.Status)} />
-            <Info label="iNews" value={formatBool(summary.inewsConnectivity?.Status)} tone={summary.inewsConnectivity?.Status === false ? 'bad' : ''} />
-            <Info label="iNews Activated" value={formatBool(summary.inewsConnectivity?.Activated)} />
-          </div>
-        </div>
 
-        <div className="panel">
-          <div className="panel-heading">
-            <h2>Latest Error</h2>
-          </div>
-          {summary.errorLog ? (
-            <div className="error-box">
-              <strong>{summary.errorLog.ErrorMsg}</strong>
-              <span>{summary.errorLog.DateTime} · Severity {summary.errorLog.Severity}</span>
-            </div>
-          ) : (
-            <p className="muted">No error received.</p>
-          )}
-        </div>
-      </section>
+
     </main>
   );
 }

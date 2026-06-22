@@ -12,11 +12,18 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
 }
 
 html {
-  min-height: 1080px;
-  min-width: 1920px;
+  height: 1080px;
+  width: 1920px;
+  overflow: hidden;
 }
 
 body {
@@ -24,9 +31,9 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
-  min-height: 1080px;
-  min-width: 1920px;
-  overflow: auto;
+  height: 1080px;
+  width: 1920px;
+  overflow: hidden;
 }
 
 button {
@@ -90,17 +97,13 @@ pre {
 .shell {
   height: 1080px;
   margin: 0 auto;
-  overflow: auto;
-  padding: 24px;
+  overflow: hidden;
+  padding: 0 24px 0 24px;
   width: 1920px;
 }
 
 .topbar {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 24px;
+  display: none;
 }
 
 .header-title {
@@ -183,7 +186,8 @@ h2 {
 }
 
 .top-control-grid {
-  margin: 14px 0 22px;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  margin: 14px 0 0 0;
 }
 
 .metric,
@@ -532,11 +536,14 @@ h2 {
 .speed-button-row {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  width: 100%;
 }
 
 .speed-button-row button {
+  flex: 1 1 0;
+  white-space: nowrap;
   background: #f4f4f4;
   border: 1px solid #a8a8a8;
   border-radius: 0;
