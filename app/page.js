@@ -17,6 +17,7 @@ export default function Home() {
   const [fontSizeInput, setFontSizeInput] = useState('');
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
+  const [rtlInput, setRtlInput] = useState(false);
   const [bgColorInput, setBgColorInput] = useState('#050505');
   const [fgColorInput, setFgColorInput] = useState('#ffffff');
   const [alternateColorInput, setAlternateColorInput] = useState(false);
@@ -33,6 +34,7 @@ export default function Home() {
   const [sendStatus, setSendStatus] = useState('');
   const [fontSizeStatus, setFontSizeStatus] = useState('');
   const [fontFamilyStatus, setFontFamilyStatus] = useState('');
+  const [directionStatus, setDirectionStatus] = useState('');
   const [colorStatus, setColorStatus] = useState('');
   const [controlStatus, setControlStatus] = useState('');
   const [storyPlayStatus, setStoryPlayStatus] = useState('');
@@ -294,6 +296,29 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (fontFamilyError) {
       setFontFamilyStatus(fontFamilyError.message);
+    }
+  }
+
+  async function sendRunorderDirection(rtl) {
+    setRtlInput(rtl);
+    setDirectionStatus(`Applying ${rtl ? 'right to left' : 'left to right'}...`);
+
+    try {
+      const response = await fetch('/api/text-direction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rtl }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to apply text direction');
+      }
+
+      setDirectionStatus(`${result.direction.toUpperCase()}: ${result.count} stories updated`);
+      setTimeout(refresh, 800);
+    } catch (directionError) {
+      setDirectionStatus(directionError.message);
     }
   }
 
@@ -685,6 +710,7 @@ export default function Home() {
         playStory={playStory}
         prepareCreateFromTree={prepareCreateFromTree}
         refreshFolders={refreshFolders}
+        rtlInput={rtlInput}
         runorderCreateStatus={runorderCreateStatus}
         runorderShowStatus={runorderShowStatus}
         setPendingCreate={setPendingCreate}
@@ -717,13 +743,19 @@ export default function Home() {
               <button disabled={status?.state !== 'open'} onClick={togglePlayPause} type="button">
                 {summary.sync?.PlayPause ? 'Pause' : 'Resume'}
               </button>
+              {[-0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2, -2.25, -2.5].map((speed) => (
+                <button disabled={status?.state !== 'open'} key={speed} onClick={() => sendSpeedPreset(speed)} type="button">
+                  {speed}
+                </button>
+              ))}
+              <button disabled={status?.state !== 'open'} onClick={() => stepSpeed(-1)} type="button">-- .25</button>
             </div>
             <div className="tele-speed-slider">
               <span>Speed: {Number.isFinite(selectedSpeed) ? selectedSpeed : getCurrentSpeed(summary) ?? 0}</span>
               <input
                 aria-label="Speed value"
                 max="6"
-                min="0"
+                min="-2.5"
                 step="0.25"
                 type="range"
                 value={speedInput || '0'}
@@ -733,7 +765,7 @@ export default function Home() {
                 }}
               />
             </div>
-            <div className="tele-speed-hint">Right Click here in this area to Pause and Resume, Mouse Wheel for speed</div>
+            <div className="tele-speed-hint">Right Click to Pause and Resume, Mouse Wheel for speed</div>
             {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
           </div>
         </section>
@@ -773,8 +805,18 @@ export default function Home() {
                 ))}
               </select>
             </label>
+            <label className="rtl-field">
+              <input
+                checked={rtlInput}
+                disabled={status?.state !== 'open'}
+                type="checkbox"
+                onChange={(event) => sendRunorderDirection(event.target.checked)}
+              />
+              <span>Right align</span>
+            </label>
             {fontSizeStatus ? <span className="send-status">{fontSizeStatus}</span> : null}
             {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
+            {directionStatus ? <span className="send-status">{directionStatus}</span> : null}
           </div>
         </section>
       </section>
@@ -992,6 +1034,7 @@ function RundownWorkspace({
   playStory,
   prepareCreateFromTree,
   refreshFolders,
+  rtlInput,
   runorderCreateStatus,
   runorderShowStatus,
   setPendingCreate,
@@ -1006,7 +1049,37 @@ function RundownWorkspace({
   treeMenu,
 }) {
   const [selectedStoryID, setSelectedStoryID] = useState('');
+  const [keyboardStoryNumber, setKeyboardStoryNumber] = useState('');
+  const storyNumberBuffer = useRef('');
+  const storyNumberTimer = useRef(undefined);
+  const storyButtonRefs = useRef(new Map());
   const selectedStory = storiesState.stories?.find((story) => String(story.storyID) === String(selectedStoryID));
+
+  function selectAndPlayStory(story) {
+    if (!story) {
+      return;
+    }
+
+    setSelectedStoryID(String(story.storyID));
+    storyButtonRefs.current.get(String(story.storyID))?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    playStory(story);
+  }
+
+  function moveStory(offset) {
+    const stories = storiesState.stories ?? [];
+    const activeID = selectedStoryID || summary.story?.CurrentStoryId;
+    const activeIndex = stories.findIndex((story) => String(story.storyID) === String(activeID));
+    const targetIndex = activeIndex === -1
+      ? offset > 0 ? 0 : stories.length - 1
+      : activeIndex + offset;
+
+    if (targetIndex >= 0 && targetIndex < stories.length) {
+      selectAndPlayStory(stories[targetIndex]);
+    }
+  }
 
   useEffect(() => {
     if (selectedStoryID && !selectedStory) {
@@ -1027,6 +1100,69 @@ function RundownWorkspace({
       setSelectedStoryID(String(currentStory.storyID));
     }
   }, [summary.story?.CurrentStoryId, storiesState.stories]);
+
+  useEffect(() => {
+    function clearStoryNumber() {
+      storyNumberBuffer.current = '';
+      setKeyboardStoryNumber('');
+      clearTimeout(storyNumberTimer.current);
+    }
+
+    function handleStoryNumberKey(event) {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+
+      if (/^\d$/.test(event.key) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        storyNumberBuffer.current += event.key;
+        setKeyboardStoryNumber(storyNumberBuffer.current);
+        clearTimeout(storyNumberTimer.current);
+        storyNumberTimer.current = setTimeout(clearStoryNumber, 3000);
+        return;
+      }
+
+      if (event.key === 'Backspace' && storyNumberBuffer.current) {
+        event.preventDefault();
+        storyNumberBuffer.current = storyNumberBuffer.current.slice(0, -1);
+        setKeyboardStoryNumber(storyNumberBuffer.current);
+        return;
+      }
+
+      if (event.key === 'Escape' && storyNumberBuffer.current) {
+        clearStoryNumber();
+        return;
+      }
+
+      if (event.key !== 'Enter' || !storyNumberBuffer.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const requestedNumber = Number(storyNumberBuffer.current);
+      const story = storiesState.stories?.find(
+        (item, index) => Number(item.serial ?? index + 1) === requestedNumber,
+      );
+      clearStoryNumber();
+
+      if (!story) {
+        return;
+      }
+
+      selectAndPlayStory(story);
+    }
+
+    window.addEventListener('keydown', handleStoryNumberKey);
+    return () => {
+      window.removeEventListener('keydown', handleStoryNumberKey);
+      clearTimeout(storyNumberTimer.current);
+    };
+  }, [playStory, storiesState.stories]);
 
   return (
     <section className="rundown-workspace">
@@ -1121,9 +1257,19 @@ function RundownWorkspace({
       <div className="panel rundown-column">
         <div className="panel-heading">
           <h2>Stories</h2>
-          <span className="muted">
-            {storyPlayStatus || (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
-          </span>
+          <div className="story-heading-actions">
+            <span className="muted">
+              {keyboardStoryNumber
+                ? `Go to story ${keyboardStoryNumber}`
+                : storyPlayStatus || (storiesState.stories?.length ? `${storiesState.stories.length} stories` : storiesState.error ?? 'Loading')}
+            </span>
+            <button disabled={!storiesState.stories?.length || status?.state !== 'open'} onClick={() => moveStory(-1)} type="button">
+              Previous
+            </button>
+            <button disabled={!storiesState.stories?.length || status?.state !== 'open'} onClick={() => moveStory(1)} type="button">
+              Next
+            </button>
+          </div>
         </div>
         <div className="story-slug-list" aria-label="Story slug list">
           {storiesState.stories?.length ? (
@@ -1135,6 +1281,13 @@ function RundownWorkspace({
                 <button
                   className={`story-slug-button ${isSelected ? 'selected' : ''} ${isCurrent ? 'current' : ''}`}
                   key={story.storyID}
+                  ref={(element) => {
+                    if (element) {
+                      storyButtonRefs.current.set(String(story.storyID), element);
+                    } else {
+                      storyButtonRefs.current.delete(String(story.storyID));
+                    }
+                  }}
                   onClick={() => setSelectedStoryID(story.storyID)}
                   onDoubleClick={() => playStory(story)}
                   title="Click to view content, double-click to make current"
@@ -1163,7 +1316,9 @@ function RundownWorkspace({
                 <span>{selectedStory.serial}</span>
                 <strong>{selectedStory.title || selectedStory.storyID}</strong>
               </div>
-              <div className="story-reader-content">{selectedStory.content || '-'}</div>
+              <div className={`story-reader-content ${rtlInput ? 'rtl' : ''}`} dir={rtlInput ? 'rtl' : 'ltr'}>
+                {selectedStory.content || '-'}
+              </div>
             </>
           ) : (
             <div className="story-reader-empty">Click a story slug to view content</div>
@@ -1271,7 +1426,7 @@ function getCurrentSpeed(summary) {
 }
 
 function clampSpeed(speed) {
-  return Math.min(6, Math.max(0.159, speed));
+  return Math.min(6, Math.max(-2.5, speed));
 }
 
 function roundToSpeedStep(speed) {

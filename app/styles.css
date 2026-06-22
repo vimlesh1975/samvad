@@ -332,6 +332,17 @@ h2 {
   overflow: auto;
 }
 
+.story-heading-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.story-heading-actions button {
+  min-height: 30px;
+  padding: 4px 9px;
+}
+
 .story-slug-button {
   align-items: center;
   background: #a8a982;
@@ -415,6 +426,12 @@ h2 {
   overflow: auto;
   padding: 14px;
   white-space: pre-wrap;
+}
+
+.story-reader-content.rtl {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
 }
 
 .story-empty,
@@ -598,6 +615,21 @@ h2 {
   font: inherit;
   min-height: 38px;
   padding: 6px 10px;
+}
+
+.rtl-field {
+  align-items: center;
+  display: flex;
+  font-weight: 600;
+  gap: 8px;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.rtl-field input {
+  height: 20px;
+  margin: 0;
+  width: 20px;
 }
 
 .control-row {

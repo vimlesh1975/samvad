@@ -133,7 +133,7 @@ Example response:
 
 ### `POST /api/speed`
 
-Sends a live teleprompter speed command.
+Sends a live teleprompter speed command. Values from `-2.5` through `6` are supported. Negative values send their absolute speed followed by Samvad's `Down` control; positive values send `Up`.
 
 Example request:
 
@@ -204,6 +204,18 @@ Applies a font family to every story in the current runorder while preserving th
 ### `GET /api/system-fonts`
 
 Returns all font families installed on the machine running the Next.js server. These populate the whole-runorder font combo.
+
+### `POST /api/text-direction`
+
+Right-aligns every story line in the current runorder for teleprompter display. Samvad does not render HTML/CSS alignment over this WebSocket path, so the app uses leading spaces with an invisible marker and removes that padding again when `rtl` is set to `false`.
+
+Set `SAMVAD_RIGHT_ALIGN_COLUMNS` in `.env` to tune how far right the text moves. The default is `60`.
+
+```json
+{
+  "rtl": true
+}
+```
 
 ### `POST /api/control`
 
