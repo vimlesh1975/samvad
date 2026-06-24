@@ -599,6 +599,8 @@ export default function Home() {
         submitPendingCreate={submitPendingCreate}
         summary={summary}
         treeMenu={treeMenu}
+        stepSpeed={stepSpeed}
+        togglePlayPause={togglePlayPause}
       />
 
       <section className="grid two top-control-grid">
@@ -740,6 +742,8 @@ function RundownWorkspace({
   submitPendingCreate,
   summary,
   treeMenu,
+  stepSpeed,
+  togglePlayPause,
 }) {
   const [selectedStoryID, setSelectedStoryID] = useState('');
   const [keyboardStoryNumber, setKeyboardStoryNumber] = useState('');
@@ -856,6 +860,36 @@ function RundownWorkspace({
       clearTimeout(storyNumberTimer.current);
     };
   }, [playStory, storiesState.stories]);
+
+  useEffect(() => {
+    function handlePageKeys(event) {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return;
+      }
+      if (event.key === 'PageDown') {
+        event.preventDefault();
+        moveStory(1);
+      } else if (event.key === 'PageUp') {
+        event.preventDefault();
+        moveStory(-1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        stepSpeed(1);
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        stepSpeed(-1);
+      } else if (event.key === ' ') {
+        event.preventDefault();
+        togglePlayPause();
+      }
+    }
+    window.addEventListener('keydown', handlePageKeys);
+    return () => window.removeEventListener('keydown', handlePageKeys);
+  });
 
   return (
     <section className="rundown-workspace">
