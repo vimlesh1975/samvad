@@ -189,6 +189,10 @@ Stops the ShuttlePRO listener.
 
 Lists distinct NRCS runorder names for the dropdown beside the `to Samvad` button. With `NEWDATABASE=true`, names come from the MySQL `bulletin` master table, matching StudioCG's `getNewsID` behavior. With `NEWDATABASE=false`, names come from the older `newsid` table. The date parameter is accepted for UI compatibility, but the dropdown list is not filtered by date.
 
+`GET /api/mos/stories?date=2026-06-24&runorder=0600%20Hrs`
+
+Lists story slugs and plain text from the NRCS MySQL `script` table for the selected date/runorder. The UI shows these as the compact vertical NRCS story strip under the database send controls.
+
 `POST /api/mos/to-samvad`
 
 Fetches stories from the NRCS MySQL `script` table and sends a MOS `roReplace` followed by `roStorySend` messages to Samvad.

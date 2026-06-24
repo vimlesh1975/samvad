@@ -2,7 +2,7 @@ import mysql from 'mysql2/promise';
 import { NextResponse } from 'next/server';
 import { compressed, escapeXml, mosEnd, mosStart, stripHtml, toUTF16BE } from '../../../../lib/mos-common';
 import { getMosTcpClient } from '../../../../lib/mos-tcp-client';
-import { assertNrcsDbConfig, getNrcsDbConfig } from '../../../../lib/nrcs-db';
+import { getNrcsMysqlConnectionConfig } from '../../../../lib/nrcs-db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -70,7 +70,7 @@ export async function POST(request) {
       throw new Error('selectedDate and selectedRunOrderTitle are required');
     }
 
-    connection = await mysql.createConnection(assertNrcsDbConfig(getNrcsDbConfig()));
+    connection = await mysql.createConnection(getNrcsMysqlConnectionConfig());
     const [rows] = await connection.execute(
       `
         SELECT *

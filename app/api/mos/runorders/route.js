@@ -1,6 +1,6 @@
 import mysql from 'mysql2/promise';
 import { NextResponse } from 'next/server';
-import { assertNrcsDbConfig, getNrcsDbConfig } from '../../../../lib/nrcs-db';
+import { assertNrcsDbConfig, getNrcsDbConfig, getNrcsMysqlConnectionConfig } from '../../../../lib/nrcs-db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,9 +11,10 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const selectedDate = searchParams.get('date') || '';
-    connection = await mysql.createConnection(assertNrcsDbConfig(getNrcsDbConfig()));
+    const dbConfig = assertNrcsDbConfig(getNrcsDbConfig());
+    connection = await mysql.createConnection(getNrcsMysqlConnectionConfig(dbConfig));
 
-    const useNewDatabase = process.env.NEWDATABASE !== 'false';
+    const useNewDatabase = dbConfig.newDatabase;
     const query = useNewDatabase
       ? `
         SELECT DISTINCT bulletinname AS title

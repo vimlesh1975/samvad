@@ -20,6 +20,7 @@ export default function Home() {
   const [mosRunorderDate, setMosRunorderDate] = useState(todayIsoDate);
   const [mosRunorderTitle, setMosRunorderTitle] = useState('0600 Hrs');
   const [mosRunorders, setMosRunorders] = useState([]);
+  const [mosStories, setMosStories] = useState({ stories: [] });
   const [mosSendStatus, setMosSendStatus] = useState('');
   const [expandedItems, setExpandedItems] = useState({ f1: true });
   const [treeMenu, setTreeMenu] = useState(null);
@@ -36,11 +37,13 @@ export default function Home() {
   const [folderCreateStatus, setFolderCreateStatus] = useState('');
   const speedTouched = useRef(false);
   const fontSizeTouched = useRef(false);
+  const lastShuttleSpeedActionAt = useRef('');
   const summary = useMemo(() => {
     return buildSummary(messages);
   }, [messages]);
   const selectedSpeed = Number(speedInput);
   const selectedFontSize = Number(fontSizeInput);
+  const displaySpeed = Number.isFinite(selectedSpeed) ? selectedSpeed : getCurrentSpeed(summary) ?? 0;
 
   async function refresh() {
     try {
@@ -94,8 +97,35 @@ export default function Home() {
       }
 
       setFoldersState(result);
+      return result;
     } catch (foldersError) {
       setFoldersState({ folders: [], error: foldersError.message });
+      throw foldersError;
+    }
+  }
+
+  async function refreshRunorderTree() {
+    setFolderCreateStatus('Refreshing run orders...');
+    setTreeMenu(null);
+    setPendingCreate(null);
+    setPendingCreateName('');
+
+    try {
+      let latestTree = await refreshFolders('f1', 'root');
+
+      const expandedFolderIDs = Object.entries(expandedItems)
+        .filter(([, isExpanded]) => isExpanded)
+        .map(([folderID]) => folderID)
+        .filter((folderID) => folderID !== 'f1');
+
+      for (const folderID of expandedFolderIDs) {
+        const folder = latestTree.items?.find((item) => String(item.itemID) === String(folderID));
+        latestTree = await refreshFolders(folderID, folder?.itemSlug || folder?.folderSlug || '');
+      }
+
+      setFolderCreateStatus(`Refreshed ${expandedFolderIDs.length + 1} folders`);
+    } catch (refreshError) {
+      setFolderCreateStatus(refreshError.message);
     }
   }
 
@@ -111,6 +141,10 @@ export default function Home() {
   useEffect(() => {
     loadMosRunorders(mosRunorderDate);
   }, [mosRunorderDate]);
+
+  useEffect(() => {
+    loadMosStories(mosRunorderDate, mosRunorderTitle);
+  }, [mosRunorderDate, mosRunorderTitle]);
 
   async function loadSystemFonts() {
     try {
@@ -156,6 +190,30 @@ export default function Home() {
     }
   }
 
+  async function loadMosStories(selectedDate, selectedRunorder) {
+    if (!selectedDate || !selectedRunorder) {
+      setMosStories({ stories: [] });
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        date: selectedDate,
+        runorder: selectedRunorder,
+      });
+      const response = await fetch(`/api/mos/stories?${params.toString()}`, { cache: 'no-store' });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Failed to load NRCS stories');
+      }
+
+      setMosStories(result);
+    } catch (storiesError) {
+      setMosStories({ stories: [], error: storiesError.message });
+    }
+  }
+
   useEffect(() => {
     if (!summary.story?.roID && !summary.readyToPlay?.roID) {
       return undefined;
@@ -179,10 +237,46 @@ export default function Home() {
   useEffect(() => {
     const currentSpeed = getCurrentSpeed(summary);
 
-    if (currentSpeed !== undefined && speedInput === '') {
-      setSpeedInput(String(Math.round(Number(currentSpeed) * 10) / 10));
+    if (currentSpeed !== undefined && !speedTouched.current) {
+      const signedSpeedInput = roundToSpeedStep(Number(speedInput));
+      const reportedSpeed = roundToSpeedStep(Number(currentSpeed));
+
+      if (
+        Number.isFinite(signedSpeedInput) &&
+        signedSpeedInput < 0 &&
+        Math.abs(Math.abs(signedSpeedInput) - Math.abs(reportedSpeed)) < 0.001
+      ) {
+        return;
+      }
+
+      setSpeedInput(String(reportedSpeed));
     }
   }, [summary.sync?.Speed, summary.speed?.CurrentSpeed, summary.speed?.Speed, speedInput]);
+
+  useEffect(() => {
+    const shuttleAction = status?.shuttle?.lastSpeedAction || (
+      status?.shuttle?.lastAction?.type === 'speed' ? status.shuttle.lastAction : null
+    );
+
+    if (
+      !shuttleAction ||
+      !shuttleAction.at ||
+      shuttleAction.at === lastShuttleSpeedActionAt.current
+    ) {
+      return;
+    }
+
+    const shuttleSpeed = Number(shuttleAction.data?.speed ?? status?.shuttle?.lastSpeed);
+
+    if (!Number.isFinite(shuttleSpeed)) {
+      return;
+    }
+
+    lastShuttleSpeedActionAt.current = shuttleAction.at;
+    speedTouched.current = false;
+    setSpeedInput(String(shuttleSpeed));
+    setSendStatus(`Shuttle speed ${shuttleSpeed}`);
+  }, [status?.shuttle?.lastAction, status?.shuttle?.lastSpeed, status?.shuttle?.lastSpeedAction]);
 
   useEffect(() => {
     if (!speedTouched.current || speedInput === '' || status?.state !== 'open') {
@@ -613,6 +707,7 @@ export default function Home() {
         playStory={playStory}
         prepareCreateFromTree={prepareCreateFromTree}
         refreshFolders={refreshFolders}
+        refreshRunorderTree={refreshRunorderTree}
         runorderCreateStatus={runorderCreateStatus}
         runorderShowStatus={runorderShowStatus}
         setPendingCreate={setPendingCreate}
@@ -655,7 +750,7 @@ export default function Home() {
               <button disabled={status?.state !== 'open'} onClick={() => stepSpeed(-1)} type="button">-- .25</button>
             </div>
             <div className="tele-speed-slider">
-              <span>Speed: {Number.isFinite(selectedSpeed) ? selectedSpeed : getCurrentSpeed(summary) ?? 0}</span>
+              <span>Speed: {displaySpeed}</span>
               <input
                 aria-label="Speed value"
                 max="6"
@@ -673,38 +768,52 @@ export default function Home() {
             {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
           </div>
           <div className="mos-send-panel">
-            <input
-              aria-label="Samvad runorder date"
-              type="date"
-              value={mosRunorderDate}
-              onChange={(event) => setMosRunorderDate(event.target.value)}
-            />
-            <select
-              aria-label="Samvad runorder title"
-              value={mosRunorderTitle}
-              onChange={(event) => setMosRunorderTitle(event.target.value)}
-            >
-              {mosRunorders.length ? (
-                <>
-                  <option value="">Select a Run Order</option>
-                  {mosRunorders.map((runorder) => (
-                    <option key={runorder.title} value={runorder.title}>
-                      {runorder.title}
-                    </option>
-                  ))}
-                </>
+            <div className="mos-send-controls">
+              <input
+                aria-label="Samvad runorder date"
+                type="date"
+                value={mosRunorderDate}
+                onChange={(event) => setMosRunorderDate(event.target.value)}
+              />
+              <select
+                aria-label="Samvad runorder title"
+                value={mosRunorderTitle}
+                onChange={(event) => setMosRunorderTitle(event.target.value)}
+              >
+                {mosRunorders.length ? (
+                  <>
+                    <option value="">Select a Run Order</option>
+                    {mosRunorders.map((runorder) => (
+                      <option key={runorder.title} value={runorder.title}>
+                        {runorder.title}
+                      </option>
+                    ))}
+                  </>
+                ) : (
+                  <option value={mosRunorderTitle}>{mosRunorderTitle || 'No runorders'}</option>
+                )}
+              </select>
+              <button
+                disabled={!mosRunorderDate || !mosRunorderTitle.trim()}
+                onClick={sendMosRunorderToSamvad}
+                type="button"
+              >
+                to Samvad
+              </button>
+              {mosSendStatus ? <span className="send-status">{mosSendStatus}</span> : null}
+            </div>
+            <div className="mos-story-strip" aria-label="NRCS story slug list">
+              {mosStories.stories?.length ? (
+                mosStories.stories.map((story) => (
+                  <div className="mos-story-row" key={story.storyID}>
+                    <span className="mos-story-number">{story.serial}</span>
+                    <span className="mos-story-title">{story.title}</span>
+                  </div>
+                ))
               ) : (
-                <option value={mosRunorderTitle}>{mosRunorderTitle || 'No runorders'}</option>
+                <div className="mos-story-empty">{mosStories.error || 'No NRCS stories'}</div>
               )}
-            </select>
-            <button
-              disabled={!mosRunorderDate || !mosRunorderTitle.trim()}
-              onClick={sendMosRunorderToSamvad}
-              type="button"
-            >
-              to Samvad
-            </button>
-            {mosSendStatus ? <span className="send-status">{mosSendStatus}</span> : null}
+            </div>
           </div>
         </section>
 
@@ -772,6 +881,7 @@ function RundownWorkspace({
   playStory,
   prepareCreateFromTree,
   refreshFolders,
+  refreshRunorderTree,
   runorderCreateStatus,
   runorderShowStatus,
   setPendingCreate,
@@ -940,7 +1050,7 @@ function RundownWorkspace({
       <div className="panel rundown-column">
         <div className="panel-heading">
           <h2>Run Orders</h2>
-          <button disabled={status?.state !== 'open'} onClick={() => refreshFolders('f1')} type="button">
+          <button disabled={status?.state !== 'open'} onClick={refreshRunorderTree} type="button">
             Refresh
           </button>
         </div>
