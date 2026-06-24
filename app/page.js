@@ -364,7 +364,19 @@ export default function Home() {
     }
 
     setRunorderContentStatus(`Loaded ${file.name}`);
-    setRunorderLines(await file.text());
+
+    try {
+      if (file.name.endsWith('.docx')) {
+        const mammoth = await import('mammoth/mammoth.browser.js');
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setRunorderLines(result.value);
+      } else {
+        setRunorderLines(await file.text());
+      }
+    } catch (err) {
+      setRunorderContentStatus(`Error loading file: ${err.message}`);
+    }
   }
 
   async function createRunorder() {
@@ -679,8 +691,8 @@ export default function Home() {
           </div>
           <div className="renderer-actions" style={{ marginTop: '12px' }}>
             <label className="file-button">
-              <span>Load Text File</span>
-              <input accept=".txt,text/plain" onChange={loadRunorderLinesFile} type="file" />
+              <span>Load Text or Word File</span>
+              <input accept=".txt,text/plain,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={loadRunorderLinesFile} type="file" />
             </label>
             <button disabled={status?.state !== 'open' || !runorderLines.trim()} onClick={() => sendRunorderContent('lines')} type="button">
               Send Lines To Runorder
@@ -1034,7 +1046,7 @@ function RundownWorkspace({
       <div className="panel rundown-column">
         <div className="panel-heading">
           <h2>Content</h2>
-          <span className="muted">{selectedStory ? selectedStory.storyID : 'Select a story'}</span>
+
         </div>
         <div className="story-reader">
           {selectedStory ? (
