@@ -782,6 +782,34 @@ h2 {
   color: var(--muted);
 }
 
+.loaded-runorder-label {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.loaded-runorder-label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.loaded-runorder-label strong {
+  color: var(--text);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.loaded-runorder-label code {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .tree-create-box {
   align-items: end;
   border: 1px solid var(--line);

@@ -41,6 +41,7 @@ SAMVAD_PASSWORD=Admin@12
 PORT=18000
 MAX_MESSAGES=100
 INSPECT_MS=20000
+SHUTTLE_PRO_ENABLED=true
 ```
 
 `scripts/next-with-env-port.mjs` loads `.env` before starting Next.js, so changing `PORT` changes the local web app port.
@@ -53,6 +54,7 @@ INSPECT_MS=20000
 - **WebSocket (`ws`)**: Server-side connection to Samvad live WebSocket.
 - **fast-xml-parser**: Parses Samvad XML messages into JavaScript objects.
 - **mammoth**: Extracts plain text from `.docx` files before sending them to a runorder.
+- **shuttle-control-usb**: Reads Contour ShuttlePRO v2 USB events directly from Node.
 - **PowerShell/System.Drawing**: On Windows, `/api/system-fonts` lists installed system fonts for the font-family combo.
 
 ## Main UI
@@ -64,6 +66,78 @@ INSPECT_MS=20000
 - Double-click a story or type a story number then Enter to make it current.
 - Control speed, play/pause, previous story, next story, font size, and whole-runorder font family.
 - Load `.txt` or `.docx` files and replace all stories in the current runorder.
+- Use ShuttlePRO v2 hardware controls with the same button/ring mapping style as the older teleprompter project.
+
+## ShuttlePRO v2
+
+This app uses direct USB events, not Chrome keyboard shortcuts. The listener runs in the local Next.js server process and sends commands directly to Samvad.
+
+Enable it in `.env`:
+
+```env
+SHUTTLE_PRO_ENABLED=true
+```
+
+When enabled, `/api/status` starts the listener automatically. The top bar shows:
+
+- `Shuttle connected`: a Shuttle device is detected.
+- `Shuttle listening`: listener is running but no device is currently detected.
+- `Shuttle off`: listener is stopped.
+
+Manual routes are also available:
+
+- `GET /api/shuttle/status`
+- `POST /api/shuttle/start`
+- `POST /api/shuttle/stop`
+
+### Shuttle Mapping
+
+Buttons:
+
+| Button | Action |
+| --- | --- |
+| 1 | Play/Pause |
+| 2 | Speed `-2.5` |
+| 3 | Speed `-1` |
+| 4 | Load first story and play from start |
+| 5 | Speed `1` |
+| 6 | Speed `1.25` |
+| 7 | Speed `1.5` |
+| 8 | Speed `1.75` |
+| 9 | Increase speed by `0.25` |
+| 10 | Go to story `5` |
+| 11 | Go to story `10` |
+| 12 | Go to story `15` |
+| 13 | Go to current story + `5` |
+| 14 | Previous story |
+| 15 | Next story |
+
+Jog:
+
+| Jog | Action |
+| --- | --- |
+| Left | Speed `-1` |
+| Right | Speed `1` |
+
+Shuttle ring:
+
+| Position | Speed |
+| --- | --- |
+| `-7` | `-2.5` |
+| `-6` | `-2.25` |
+| `-5` | `-2` |
+| `-4` | `-1.75` |
+| `-3` | `-1.5` |
+| `-2` | `-1.25` |
+| `-1` | `-1` |
+| `0` | Pause |
+| `1` | `1` |
+| `2` | `1.25` |
+| `3` | `1.5` |
+| `4` | `1.75` |
+| `5` | `2` |
+| `6` | `2.25` |
+| `7` | `2.5` |
 
 ## APIs
 
@@ -82,6 +156,20 @@ Returns recent parsed WebSocket messages. Controlled by `MAX_MESSAGES`.
 `POST /api/reconnect`
 
 Closes and reconnects the Samvad WebSocket client.
+
+### ShuttlePRO
+
+`GET /api/shuttle/status`
+
+Returns Shuttle listener state, connected devices, last hardware event, last Samvad action, and the active mapping.
+
+`POST /api/shuttle/start`
+
+Starts the ShuttlePRO listener manually, even if `SHUTTLE_PRO_ENABLED` is not set.
+
+`POST /api/shuttle/stop`
+
+Stops the ShuttlePRO listener.
 
 ### Runorder Tree
 

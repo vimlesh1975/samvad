@@ -66,6 +66,15 @@ export default function Home() {
     }
   }
 
+  async function setShuttleRunning(running) {
+    try {
+      await fetch(running ? '/api/shuttle/start' : '/api/shuttle/stop', { method: 'POST' });
+      setTimeout(refresh, 500);
+    } catch (shuttleError) {
+      setError(shuttleError.message);
+    }
+  }
+
   async function refreshFolders(parentID = 'f1', parentSlug = '') {
     try {
       const response = await fetch('/api/folders', {
@@ -510,6 +519,22 @@ export default function Home() {
   return (
     <main className="shell">
       <section className="topbar">
+        <div className="header-title">
+          <span>Samvad Teleprompter</span>
+          <span>WebSocket Inspector</span>
+        </div>
+        <div className={`status-pill ${status?.state === 'open' ? 'open' : ''}`}>
+          <span />
+          {status?.state ?? 'loading'}
+        </div>
+        <div className={`status-pill ${status?.shuttle?.connected ? 'open' : ''}`}>
+          <span />
+          Shuttle {status?.shuttle?.connected ? 'connected' : status?.shuttle?.running ? 'listening' : 'off'}
+        </div>
+        <button onClick={reconnectSocket} type="button">Reconnect</button>
+        <button onClick={() => setShuttleRunning(!status?.shuttle?.running)} type="button">
+          {status?.shuttle?.running ? 'Stop Shuttle' : 'Start Shuttle'}
+        </button>
       </section>
 
 
@@ -672,6 +697,8 @@ function RundownWorkspace({
   const storyNumberTimer = useRef(undefined);
   const storyButtonRefs = useRef(new Map());
   const selectedStory = storiesState.stories?.find((story) => String(story.storyID) === String(selectedStoryID));
+  const loadedRunorderSlug = summary.readyToPlay?.roSlug || summary.story?.roSlug || '';
+  const loadedRunorderID = summary.readyToPlay?.roID || summary.story?.roID || '';
 
   function selectAndPlayStory(story) {
     if (!story) {
@@ -862,6 +889,11 @@ function RundownWorkspace({
               </button>
             </div>
           ) : null}
+        </div>
+        <div className="loaded-runorder-label">
+          <span>Loaded Runorder</span>
+          <strong>{loadedRunorderSlug || loadedRunorderID || 'None'}</strong>
+          {loadedRunorderSlug && loadedRunorderID ? <code>{loadedRunorderID}</code> : null}
         </div>
         {pendingCreate ? (
           <div className="tree-create-box">
