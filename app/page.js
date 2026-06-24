@@ -907,9 +907,9 @@ function RundownWorkspace({
     <section className="rundown-workspace">
       <div className="panel rundown-column">
         <div className="panel-heading">
-          <h2>Tree</h2>
+          <h2>Run Orders</h2>
           <button disabled={status?.state !== 'open'} onClick={() => refreshFolders('f1')} type="button">
-            Refresh Tree
+            Refresh
           </button>
         </div>
         <div className="tree-view workspace-tree" onClick={() => setTreeMenu(null)}>
