@@ -1,232 +1,184 @@
-# Samvad Next.js WebSocket Inspector
+# Samvad Teleprompter Controller
 
-Small Next.js JavaScript project that connects to the Samvad teleprompter WebSocket, displays live teleprompter state, and sends control commands back to Samvad.
+Next.js controller for a Samvad Teleprompter device. The app connects to Samvad over WebSocket, reads runorders/stories, sends play controls, changes speed/font settings, and can replace the current runorder stories from a text or Word file.
 
-Default targets:
-
-- Web UI: `http://localhost:$PORT/`
-- Samvad WebSocket: configured with `SAMVAD_WS_URL` or `SAMVAD_HOST` + `SAMVAD_WS_PORT`
-- Samvad source UI: configured with `SAMVAD_HTTP_URL` or `SAMVAD_HOST` + `SAMVAD_HTTP_PORT`
+![Samvad controller screenshot](./image.png)
 
 ## Run
 
-```powershell
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the app:
+
+```bash
 npm run dev
 ```
 
-Then open:
+Open [http://localhost:18000](http://localhost:18000).
 
-- `http://localhost:$PORT/` for the dashboard
-- `http://localhost:$PORT/api/status` for connection status and latest parsed frame
-- `http://localhost:$PORT/api/messages` for recent parsed frames
-- `http://localhost:$PORT/api/stories` for the current rundown story table
+The port comes from `.env`:
 
-## One-off WebSocket capture
-
-```powershell
-npm run inspect:ws
+```env
+PORT=18000
 ```
 
-Optional environment variables:
+## Configuration
 
-- `SAMVAD_HOST`
-- `SAMVAD_HTTP_PORT`
-- `SAMVAD_WS_PORT`
-- `SAMVAD_HTTP_URL`
-- `SAMVAD_WS_URL`
-- `SAMVAD_USERNAME`
-- `SAMVAD_PASSWORD`
-- `INSPECT_MS`, default `20000`
-- `PORT`, default `3000`. `npm run dev` and `npm run start` read this from `.env`.
-- `MAX_MESSAGES`, default `100`
+Create `.env` from `.env.example` and set the Samvad device details:
 
-The controller logs in automatically whenever its WebSocket connects, including after the Samvad device restarts. If Samvad reports a stale active session, the controller requests session takeover and then opens the root folder.
+```env
+SAMVAD_HOST=192.168.0.15
+SAMVAD_HTTP_PORT=9000
+SAMVAD_WS_PORT=9095
+SAMVAD_HTTP_URL=http://192.168.0.15:9000
+SAMVAD_WS_URL=ws://192.168.0.15:9095
+SAMVAD_USERNAME=admin
+SAMVAD_PASSWORD=Admin@12
+PORT=18000
+MAX_MESSAGES=100
+INSPECT_MS=20000
+```
 
-## API Methods
+`scripts/next-with-env-port.mjs` loads `.env` before starting Next.js, so changing `PORT` changes the local web app port.
 
-### `GET /api/status`
+## Technologies
 
-Returns WebSocket connection state and the latest parsed frame.
+- **Next.js App Router**: UI and API routes live in the `app` directory.
+- **React**: Client-side controller UI in `app/page.js`.
+- **Custom CSS**: Fixed 1920x1080 teleprompter-control layout in `app/styles.css`.
+- **WebSocket (`ws`)**: Server-side connection to Samvad live WebSocket.
+- **fast-xml-parser**: Parses Samvad XML messages into JavaScript objects.
+- **mammoth**: Extracts plain text from `.docx` files before sending them to a runorder.
+- **PowerShell/System.Drawing**: On Windows, `/api/system-fonts` lists installed system fonts for the font-family combo.
 
-Example response:
+## Main UI
+
+- Browse Samvad folders and runorders in the tree.
+- Right-click tree items to create folders/runorders or delete items.
+- Double-click a runorder to load it on the teleprompter.
+- View stories in the middle column and selected story content in the right column.
+- Double-click a story or type a story number then Enter to make it current.
+- Control speed, play/pause, previous story, next story, font size, and whole-runorder font family.
+- Load `.txt` or `.docx` files and replace all stories in the current runorder.
+
+## APIs
+
+All routes return JSON. Success responses normally include `ok: true`; errors include `ok: false` and `error`.
+
+### Status And Inspection
+
+`GET /api/status`
+
+Returns current WebSocket state, target URL, latest message, message count, and auth state.
+
+`GET /api/messages`
+
+Returns recent parsed WebSocket messages. Controlled by `MAX_MESSAGES`.
+
+`POST /api/reconnect`
+
+Closes and reconnects the Samvad WebSocket client.
+
+### Runorder Tree
+
+`GET /api/folders`
+
+Loads the root folder tree.
+
+`POST /api/folders`
+
+Loads a folder subtree.
 
 ```json
 {
-  "url": "ws://<SAMVAD_HOST>:<SAMVAD_WS_PORT>",
-  "state": "open",
-  "messageCount": 13,
-  "latestMessage": {
-    "receivedAt": "2026-05-30T05:39:00.081Z",
-    "transportType": "text",
-    "format": "xml",
-    "byteLength": 121,
-    "preview": "<PCSyncPlay><messageID>973</messageID><roID>DDNRCS_RO</roID><CurrentStoryId>202605291050541</CurrentStoryId></PCSyncPlay>",
-    "xmlShape": {
-      "root": "PCSyncPlay",
-      "event": "StoryStatus",
-      "summary": {
-        "messageID": 973,
-        "roID": "DDNRCS_RO",
-        "CurrentStoryId": 202605291050541
-      }
-    }
-  }
+  "parentID": "f1",
+  "parentSlug": "root",
+  "refresh": true
 }
 ```
 
-### `GET /api/messages`
+`POST /api/folder-create`
 
-Returns recent parsed WebSocket frames. The count is controlled by `MAX_MESSAGES`.
-
-Example response:
+Creates a folder under a parent folder.
 
 ```json
-[
-  {
-    "receivedAt": "2026-05-30T05:07:10.100Z",
-    "transportType": "text",
-    "format": "xml",
-    "byteLength": 587,
-    "xmlShape": {
-      "root": "PCSyncPlay",
-      "event": "Sync",
-      "summary": {
-        "PlayPause": false,
-        "Stop": false,
-        "Speed": 3.8,
-        "FontSize": 80,
-        "BgColor": "#050505",
-        "FgColor": "#FFFFFF"
-      }
-    }
-  }
-]
+{
+  "name": "New Folder",
+  "parentID": "f1"
+}
 ```
 
-### `GET /api/stories`
+`POST /api/runorder-create`
 
-Fetches the current rundown table from Samvad's `rowindow{roID}.html` endpoint and parses story rows.
+Creates a runorder under a parent folder.
 
-Example response:
+```json
+{
+  "name": "Morning Rundown",
+  "parentID": "f1"
+}
+```
+
+`POST /api/item-delete`
+
+Deletes a folder or runorder item.
+
+```json
+{
+  "itemID": "DDNRCS_RO",
+  "itemSlug": "Morning Rundown",
+  "itemType": "runorder"
+}
+```
+
+`POST /api/runorder-show`
+
+Loads a runorder on the teleprompter, similar to Samvad's ready-to-play action.
 
 ```json
 {
   "roID": "DDNRCS_RO",
-  "roSlug": "0600 Hrs_2026-05-29",
-  "userID": 40,
-  "stories": [
-    {
-      "serial": "1",
-      "blocked": false,
-      "title": "uuuuu",
-      "storyID": "202605291050542"
-    },
-    {
-      "serial": "2",
-      "blocked": false,
-      "title": "bb",
-      "storyID": "202605290938001"
-    }
-  ]
+  "roSlug": "Morning Rundown"
 }
 ```
 
-### `POST /api/speed`
+### Stories
 
-Sends a live teleprompter speed command. Values from `-2.5` through `6` are supported. Negative values send their absolute speed followed by Samvad's `Down` control; positive values send `Up`.
+`GET /api/stories`
 
-Example request:
+Returns stories from the current runorder, including story id, title, raw content, plain content, and rendered preview HTML.
+
+`POST /api/story-play`
+
+Makes a story current on the teleprompter.
 
 ```json
 {
-  "speed": 4.2
+  "storyID": "story-1",
+  "storySlug": "Opening Headlines"
 }
 ```
 
-XML sent to Samvad:
+`POST /api/runorder-content`
 
-```xml
-<PCSyncPlay><Speed><roID>DDNRCS_RO</roID><CurrentSpeed>4.2</CurrentSpeed><MaxSpeed>20</MaxSpeed></Speed></PCSyncPlay>
-```
-
-Example response:
+Replaces the stories in the current runorder from pasted/uploaded text. The UI sends one story per line or paragraph.
 
 ```json
 {
-  "ok": true,
-  "sentAt": "2026-05-30T05:34:00.000Z",
-  "speed": 4.2,
-  "roID": "DDNRCS_RO",
-  "xml": "<PCSyncPlay><Speed><roID>DDNRCS_RO</roID><CurrentSpeed>4.2</CurrentSpeed><MaxSpeed>20</MaxSpeed></Speed></PCSyncPlay>"
+  "mode": "lines",
+  "html": "Story one\nStory two\nStory three"
 }
 ```
 
-### `POST /api/font-size`
+### Teleprompter Controls
 
-Sends a live font-size command.
+`POST /api/control`
 
-Example request:
-
-```json
-{
-  "fontSize": 96
-}
-```
-
-XML sent to Samvad:
-
-```xml
-<PCSyncPlay><FontSize><roID>DDNRCS_RO</roID><FontSize>96</FontSize></FontSize></PCSyncPlay>
-```
-
-Example response:
-
-```json
-{
-  "ok": true,
-  "sentAt": "2026-05-30T05:40:00.000Z",
-  "fontSize": 96,
-  "roID": "DDNRCS_RO",
-  "xml": "<PCSyncPlay><FontSize><roID>DDNRCS_RO</roID><FontSize>96</FontSize></FontSize></PCSyncPlay>"
-}
-```
-
-### `POST /api/font-family`
-
-Applies a font family to every story in the current runorder while preserving the story text and other SMVD formatting.
-
-```json
-{
-  "fontFamily": "Mangal"
-}
-```
-
-### `GET /api/system-fonts`
-
-Returns all font families installed on the machine running the Next.js server. These populate the whole-runorder font combo.
-
-### `POST /api/text-direction`
-
-Converts every story line in the current runorder for Urdu-style RTL teleprompter display. Samvad does not render HTML/CSS direction over this WebSocket path, so the app shapes Arabic/Urdu characters into presentation forms and sends the line in visual order. Sending `rtl: false` removes that visual-order conversion where the app marker is present.
-
-```json
-{
-  "rtl": true
-}
-```
-
-### `POST /api/control`
-
-Sends a Samvad control command.
-
-Allowed commands:
-
-- `Play`
-- `Pause`
-- `Skip`
-- `Previous`
-
-Example request:
+Sends a control command.
 
 ```json
 {
@@ -234,324 +186,102 @@ Example request:
 }
 ```
 
-XML sent to Samvad:
+Known commands used by the app:
 
-```xml
-<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Play</Status></Control></PCSyncPlay>
-```
+- `Play`
+- `Pause`
+- `Skip`
+- `Previous`
+- `Up`
+- `Down`
 
-Example response:
+`POST /api/speed`
 
-```json
-{
-  "ok": true,
-  "sentAt": "2026-05-30T05:39:00.000Z",
-  "command": "Play",
-  "roID": "DDNRCS_RO",
-  "xml": "<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Play</Status></Control></PCSyncPlay>"
-}
-```
-
-### `POST /api/story-play`
-
-Makes a specific story current by sending Samvad's `roCntrl` play command. The dashboard calls this when a story row is double-clicked.
-
-Example request:
+Sets scroll speed. Positive values send forward direction; negative values send reverse direction using Samvad's direction control.
 
 ```json
 {
-  "storyID": "202605291050542",
-  "storySlug": "uuuuu"
+  "speed": 1.5
 }
 ```
 
-XML sent to Samvad:
+`POST /api/font-size`
 
-```xml
-<PCSyncPlay><roCntrl><roID>DDNRCS_RO</roID><element_target><storyID>202605291050542</storyID><storySlug>uuuuu</storySlug><Block>false</Block></element_target><command>Play</command></roCntrl></PCSyncPlay>
-```
-
-Example response:
+Sets teleprompter font size.
 
 ```json
 {
-  "ok": true,
-  "sentAt": "2026-05-30T05:50:00.000Z",
-  "roID": "DDNRCS_RO",
-  "storyID": "202605291050542",
-  "storySlug": "uuuuu",
-  "xml": "<PCSyncPlay><roCntrl><roID>DDNRCS_RO</roID><element_target><storyID>202605291050542</storyID><storySlug>uuuuu</storySlug><Block>false</Block></element_target><command>Play</command></roCntrl></PCSyncPlay>"
+  "fontSize": 96
 }
 ```
 
-### `POST /api/runorder-content`
+`POST /api/font-family`
 
-Sends content to multiple stories in the current runorder.
-
-Supported modes:
-
-- `blank`: blanks every story.
-- `custom`: sends the same HTML template to every story. Supports `{{serial}}`, `{{title}}`, and `{{storyID}}`.
-- `lines`: treats each non-empty newline as one story. Line 1 goes to story 1, line 2 goes to story 2. Extra lines are ignored; extra stories are skipped.
-
-Example request for newline-separated scripts:
+Applies a font family to every story in the current runorder.
 
 ```json
 {
-  "mode": "lines",
-  "html": "First story script text\nSecond story script text\nThird story script text"
+  "fontFamily": "Arial"
 }
 ```
 
-Example response:
+`GET /api/system-fonts`
 
-```json
-{
-  "ok": true,
-  "sentAt": "2026-05-30T08:10:00.000Z",
-  "roID": "DDNRCS_RO",
-  "mode": "lines",
-  "count": 3,
-  "skippedCount": 0
-}
-```
+Returns installed fonts from the machine running the Next.js server.
 
-### `POST /api/runorder-create`
+### Experimental/Legacy Routes
 
-Creates a new Samvad runorder in a folder. Samvad's root folder id is usually `f1`.
+These routes still exist for testing Samvad behavior, but the main UI no longer shows their controls:
 
-Example request:
+- `POST /api/story-content`: sends content to the current story.
+- `POST /api/colors`: sends foreground/background color sync test data.
+- `POST /api/alternate-color`: toggles alternate color sync test data.
+- `POST /api/text-direction`: experimental Urdu/RTL visual-order conversion.
 
-```json
-{
-  "name": "Morning Bulletin",
-  "parentID": "f1"
-}
-```
+## Samvad Protocol Notes
 
-XML sent to Samvad:
+The app sends and receives Samvad XML wrapped in `<PCSyncPlay>`.
+
+Example login:
 
 ```xml
-<PCSyncPlay><itemCreate><itemType>runorder</itemType><itemSlug>Morning Bulletin</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
+<PCSyncPlay>
+  <Login>
+    <UserName>admin</UserName>
+    <PassWord>Admin@12</PassWord>
+    <LogoutFromOtherSystem>false</LogoutFromOtherSystem>
+  </Login>
+</PCSyncPlay>
 ```
 
-This is the same message the Samvad web UI sends from its folder tree create menu.
-
-### `POST /api/runorder-show`
-
-Opens a runorder window and then marks it as ready to play on the teleprompter. The dashboard sends this when a runorder node is double-clicked in the tree. This mimics Samvad's `getMultiTabs()` flow before sending the same ready message as the `readyToPlay()` button.
-
-Example request:
-
-```json
-{
-  "roID": "r6",
-  "roSlug": "Morning Bulletin"
-}
-```
-
-XML sent to Samvad:
-
-```http
-GET /rowindow6.html?userid=40&itemid=r6&itemslug=Morning+Bulletin&refresh=false
-```
+Example speed:
 
 ```xml
-<PCSyncPlay><ReadyToPlay><roID>6</roID></ReadyToPlay></PCSyncPlay>
+<PCSyncPlay>
+  <Speed>
+    <roID>DDNRCS_RO</roID>
+    <CurrentSpeed>1.5</CurrentSpeed>
+    <MaxSpeed>20</MaxSpeed>
+  </Speed>
+</PCSyncPlay>
 ```
 
-Tree ids such as `r6` and `rDDNRCS_RO` are normalized to `6` and `DDNRCS_RO` before sending `ReadyToPlay`. Samvad replies with a `ReadyToPlay` frame that includes the runorder slug.
-
-### `POST /api/folder-create`
-
-Creates a new Samvad folder under a parent folder. Use `f1` to create a top-level folder under root.
-
-Example request:
-
-```json
-{
-  "name": "News Folder",
-  "parentID": "f1"
-}
-```
-
-XML sent to Samvad:
+Example direction:
 
 ```xml
-<PCSyncPlay><itemCreate><itemType>folder</itemType><itemSlug>News Folder</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
+<PCSyncPlay>
+  <Control>
+    <roID>DDNRCS_RO</roID>
+    <Status>Down</Status>
+  </Control>
+</PCSyncPlay>
 ```
 
-### `GET /api/folders`
+## Build
 
-Refreshes the Samvad root folder and returns known folder/runorder tree items with their real ids.
-
-XML sent to Samvad:
-
-```xml
-<PCSyncPlay><itemOpen><itemID>f1</itemID><itemSlug>root</itemSlug><ExpandAll>false</ExpandAll></itemOpen></PCSyncPlay>
+```bash
+npm run build
+npm start
 ```
 
-Example response:
-
-```json
-{
-  "ok": true,
-  "requestedParentID": "f1",
-  "items": [
-    {
-      "itemID": "f7",
-      "itemSlug": "vimlesh",
-      "itemType": "folder",
-      "parentID": "f1"
-    },
-    {
-      "itemID": "rDDNRCS_RO",
-      "itemSlug": "0600 Hrs_2026-05-29",
-      "itemType": "runorder",
-      "parentID": "f1"
-    }
-  ],
-  "folders": [
-    {
-      "folderID": "f7",
-      "folderSlug": "vimlesh",
-      "parentID": "f1"
-    }
-  ]
-}
-```
-
-### `POST /api/item-delete`
-
-Deletes a folder or runorder from Samvad. The root folder `f1` is blocked by the Next.js app.
-
-Example request:
-
-```json
-{
-  "itemType": "runorder",
-  "itemID": "rDDNRCS_RO",
-  "itemSlug": "0600 Hrs_2026-05-29"
-}
-```
-
-XML sent to Samvad:
-
-```xml
-<PCSyncPlay><itemOperation><operation>Delete</operation><itemType>runorder</itemType><source><itemID>rDDNRCS_RO</itemID><itemSlug>0600 Hrs_2026-05-29</itemSlug></source><target><pID></pID></target></itemOperation></PCSyncPlay>
-```
-
-## WebSocket Receive Examples
-
-### Login
-
-```xml
-<PCSyncPlay><Login><Success>true</Success><UserID>40</UserID><Privileges>03,13,21,33</Privileges><LogoutFromOtherSystem>-1</LogoutFromOtherSystem></Login></PCSyncPlay>
-```
-
-Parsed summary:
-
-```json
-{
-  "event": "Login",
-  "summary": {
-    "Success": true,
-    "UserID": 40,
-    "Privileges": "03,13,21,33",
-    "LogoutFromOtherSystem": -1
-  }
-}
-```
-
-### Ready To Play
-
-```xml
-<PCSyncPlay><ReadyToPlay><roID>6</roID><roSlug>0600 Hrs_2026-05-29</roSlug></ReadyToPlay></PCSyncPlay>
-```
-
-### Sync State
-
-```xml
-<PCSyncPlay><Sync><PlayPause>false</PlayPause><DummyPlay>false</DummyPlay><Stop>false</Stop><Mirror>false</Mirror><Toggle>false</Toggle><Blank>false</Blank><ShowDateTime>false</ShowDateTime><ShowTimer>false</ShowTimer><ShowCountDownTimer>false</ShowCountDownTimer><Finish>false</Finish><Speed>3.8</Speed><FontSize>80</FontSize><AlternateColorStatus>false</AlternateColorStatus><AllowDummyPlayDuringPlayingTime>false</AllowDummyPlayDuringPlayingTime><BreakLineChar>@</BreakLineChar><BgColor>#050505</BgColor><FgColor>#FFFFFF</FgColor><EditorScroll>false</EditorScroll></Sync></PCSyncPlay>
-```
-
-### Current Story
-
-```xml
-<PCSyncPlay><messageID>973</messageID><roID>DDNRCS_RO</roID><CurrentStoryId>202605291050541</CurrentStoryId></PCSyncPlay>
-```
-
-Parsed as:
-
-```json
-{
-  "event": "StoryStatus",
-  "summary": {
-    "messageID": 973,
-    "roID": "DDNRCS_RO",
-    "CurrentStoryId": 202605291050541
-  }
-}
-```
-
-### iNews Connectivity Error
-
-```xml
-<PCSyncPlay><ErrorLog><DateTime>2026/05/30 10:46:51</DateTime><ErrorMsg>Connection to inews server failed due to error: Host unreachable</ErrorMsg><Severity>3</Severity></ErrorLog></PCSyncPlay>
-```
-
-```xml
-<PCSyncPlay><InewsConnectivity><Status>false</Status><Activated>true</Activated></InewsConnectivity></PCSyncPlay>
-```
-
-## WebSocket Send Examples
-
-### Speed
-
-```xml
-<PCSyncPlay><Speed><roID>DDNRCS_RO</roID><CurrentSpeed>4.2</CurrentSpeed><MaxSpeed>20</MaxSpeed></Speed></PCSyncPlay>
-```
-
-### Font Size
-
-```xml
-<PCSyncPlay><FontSize><roID>DDNRCS_RO</roID><FontSize>96</FontSize></FontSize></PCSyncPlay>
-```
-
-### Play/Pause
-
-```xml
-<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Play</Status></Control></PCSyncPlay>
-```
-
-```xml
-<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Pause</Status></Control></PCSyncPlay>
-```
-
-### Next/Previous Story
-
-```xml
-<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Skip</Status></Control></PCSyncPlay>
-```
-
-```xml
-<PCSyncPlay><Control><roID>DDNRCS_RO</roID><Status>Previous</Status></Control></PCSyncPlay>
-```
-
-### Play Specific Story
-
-```xml
-<PCSyncPlay><roCntrl><roID>DDNRCS_RO</roID><element_target><storyID>202605291050542</storyID><storySlug>uuuuu</storySlug><Block>false</Block></element_target><command>Play</command></roCntrl></PCSyncPlay>
-```
-
-### Create Runorder
-
-```xml
-<PCSyncPlay><itemCreate><itemType>runorder</itemType><itemSlug>Morning Bulletin</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
-```
-
-### Create Folder
-
-```xml
-<PCSyncPlay><itemCreate><itemType>folder</itemType><itemSlug>News Folder</itemSlug><pID>f1</pID></itemCreate></PCSyncPlay>
-```
+`npm start` also reads `PORT` from `.env`, so production starts on [http://localhost:18000](http://localhost:18000) with the current configuration.

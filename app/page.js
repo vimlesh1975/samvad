@@ -16,10 +16,6 @@ export default function Home() {
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
   const [runorderLines, setRunorderLines] = useState('');
-  const [newRunorderName, setNewRunorderName] = useState('');
-  const [newRunorderParent, setNewRunorderParent] = useState('f1');
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderParent, setNewFolderParent] = useState('f1');
   const [expandedItems, setExpandedItems] = useState({ f1: true });
   const [treeMenu, setTreeMenu] = useState(null);
   const [pendingCreate, setPendingCreate] = useState(null);
@@ -35,7 +31,6 @@ export default function Home() {
   const [folderCreateStatus, setFolderCreateStatus] = useState('');
   const speedTouched = useRef(false);
   const fontSizeTouched = useRef(false);
-  const latest = status?.latestMessage;
   const summary = useMemo(() => {
     return buildSummary(messages);
   }, [messages]);
@@ -379,74 +374,6 @@ export default function Home() {
     }
   }
 
-  async function createRunorder() {
-    const name = newRunorderName.trim();
-
-    if (!name) {
-      setRunorderCreateStatus('Enter a runorder name');
-      return;
-    }
-
-    setRunorderCreateStatus(`Creating ${name}...`);
-
-    try {
-      const response = await fetch('/api/runorder-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          parentID: newRunorderParent.trim() || 'f1',
-        }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? 'Failed to create runorder');
-      }
-
-      setRunorderCreateStatus(`Created ${result.itemSlug} in ${result.parentID}`);
-      setNewRunorderName('');
-      setTimeout(() => refreshFolders(result.parentID), 700);
-      setTimeout(refresh, 1200);
-    } catch (createError) {
-      setRunorderCreateStatus(createError.message);
-    }
-  }
-
-  async function createFolder() {
-    const name = newFolderName.trim();
-
-    if (!name) {
-      setFolderCreateStatus('Enter a folder name');
-      return;
-    }
-
-    setFolderCreateStatus(`Creating ${name}...`);
-
-    try {
-      const response = await fetch('/api/folder-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          parentID: newFolderParent.trim() || 'f1',
-        }),
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.ok) {
-        throw new Error(result.error ?? 'Failed to create folder');
-      }
-
-      setFolderCreateStatus(`Created ${result.itemSlug} in ${result.parentID}`);
-      setNewFolderName('');
-      setTimeout(() => refreshFolders(result.parentID), 700);
-      setTimeout(refresh, 1200);
-    } catch (createError) {
-      setFolderCreateStatus(createError.message);
-    }
-  }
-
   async function expandTreeFolder(item) {
     setTreeMenu(null);
     setExpandedItems((current) => ({
@@ -709,24 +636,6 @@ export default function Home() {
 
 
     </main>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{String(value)}</strong>
-    </div>
-  );
-}
-
-function Info({ label, value, tone = '' }) {
-  return (
-    <div className={`info ${tone}`}>
-      <span>{label}</span>
-      <strong>{String(value)}</strong>
-    </div>
   );
 }
 
@@ -1152,18 +1061,6 @@ function buildSummary(messages) {
   }, {});
 }
 
-function formatBool(value) {
-  if (value === true) {
-    return 'Yes';
-  }
-
-  if (value === false) {
-    return 'No';
-  }
-
-  return 'Waiting';
-}
-
 function getCurrentSpeed(summary) {
   return summary.speed?.CurrentSpeed ?? summary.speed?.Speed ?? summary.sync?.Speed;
 }
@@ -1178,8 +1075,4 @@ function roundToSpeedStep(speed) {
 
 function getCurrentFontSize(summary) {
   return summary.fontSize?.FontSize ?? summary.sync?.FontSize;
-}
-
-function isHexColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(String(value));
 }
