@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const refreshMs = 2000;
 const fallbackFonts = ['Arial', 'Times New Roman'];
+const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
 export default function Home() {
   const [status, setStatus] = useState(null);
@@ -16,6 +17,10 @@ export default function Home() {
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
   const [runorderLines, setRunorderLines] = useState('');
+  const [mosRunorderDate, setMosRunorderDate] = useState(todayIsoDate);
+  const [mosRunorderTitle, setMosRunorderTitle] = useState('0600 Hrs');
+  const [mosRunorders, setMosRunorders] = useState([]);
+  const [mosSendStatus, setMosSendStatus] = useState('');
   const [expandedItems, setExpandedItems] = useState({ f1: true });
   const [treeMenu, setTreeMenu] = useState(null);
   const [pendingCreate, setPendingCreate] = useState(null);
@@ -98,9 +103,14 @@ export default function Home() {
     refresh();
     refreshFolders();
     loadSystemFonts();
+    loadMosRunorders(mosRunorderDate);
     const timer = setInterval(refresh, refreshMs);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    loadMosRunorders(mosRunorderDate);
+  }, [mosRunorderDate]);
 
   async function loadSystemFonts() {
     try {
@@ -117,6 +127,32 @@ export default function Home() {
       }
     } catch (fontError) {
       setFontFamilyStatus(fontError.message);
+    }
+  }
+
+  async function loadMosRunorders(selectedDate) {
+    try {
+      const params = new URLSearchParams();
+
+      if (selectedDate) {
+        params.set('date', selectedDate);
+      }
+
+      const response = await fetch(`/api/mos/runorders?${params.toString()}`, { cache: 'no-store' });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Failed to load NRCS runorders');
+      }
+
+      setMosRunorders(result.runorders ?? []);
+
+      if (result.runorders?.length && !result.runorders.some((item) => item.title === mosRunorderTitle)) {
+        setMosRunorderTitle(result.runorders[0].title);
+      }
+    } catch (runorderError) {
+      setMosRunorders([]);
+      setMosSendStatus(runorderError.message);
     }
   }
 
@@ -276,6 +312,32 @@ export default function Home() {
       setTimeout(refresh, 800);
     } catch (fontFamilyError) {
       setFontFamilyStatus(fontFamilyError.message);
+    }
+  }
+
+  async function sendMosRunorderToSamvad() {
+    setMosSendStatus('Sending to Samvad...');
+
+    try {
+      const response = await fetch('/api/mos/to-samvad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedDate: mosRunorderDate,
+          selectedRunOrderTitle: mosRunorderTitle,
+          sendMode: 'full',
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error ?? 'Error sending to Samvad');
+      }
+
+      setMosSendStatus(result.message);
+      setTimeout(refresh, 1200);
+    } catch (sendError) {
+      setMosSendStatus(sendError.message);
     }
   }
 
@@ -609,6 +671,40 @@ export default function Home() {
             </div>
             <div className="tele-speed-hint">Right Click to Pause and Resume, Mouse Wheel for speed</div>
             {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
+          </div>
+          <div className="mos-send-panel">
+            <input
+              aria-label="Samvad runorder date"
+              type="date"
+              value={mosRunorderDate}
+              onChange={(event) => setMosRunorderDate(event.target.value)}
+            />
+            <select
+              aria-label="Samvad runorder title"
+              value={mosRunorderTitle}
+              onChange={(event) => setMosRunorderTitle(event.target.value)}
+            >
+              {mosRunorders.length ? (
+                <>
+                  <option value="">Select a Run Order</option>
+                  {mosRunorders.map((runorder) => (
+                    <option key={runorder.title} value={runorder.title}>
+                      {runorder.title}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <option value={mosRunorderTitle}>{mosRunorderTitle || 'No runorders'}</option>
+              )}
+            </select>
+            <button
+              disabled={!mosRunorderDate || !mosRunorderTitle.trim()}
+              onClick={sendMosRunorderToSamvad}
+              type="button"
+            >
+              to Samvad
+            </button>
+            {mosSendStatus ? <span className="send-status">{mosSendStatus}</span> : null}
           </div>
         </section>
 

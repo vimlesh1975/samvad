@@ -33,15 +33,15 @@ setTimeout(() => {
 }, durationMs);
 
 function getSamvadWsUrl() {
-  if (process.env.SAMVAD_WS_URL) {
-    return process.env.SAMVAD_WS_URL;
-  }
-
   const host = process.env.SAMVAD_HOST;
   const port = process.env.SAMVAD_WS_PORT;
 
   if (host && port) {
     return `ws://${host}:${port}`;
+  }
+
+  if (process.env.SAMVAD_WS_URL) {
+    return process.env.SAMVAD_WS_URL;
   }
 
   throw new Error('Set SAMVAD_WS_URL or SAMVAD_HOST and SAMVAD_WS_PORT');

@@ -34,17 +34,26 @@ Create `.env` from `.env.example` and set the Samvad device details:
 SAMVAD_HOST=192.168.0.15
 SAMVAD_HTTP_PORT=9000
 SAMVAD_WS_PORT=9095
-SAMVAD_HTTP_URL=http://192.168.0.15:9000
-SAMVAD_WS_URL=ws://192.168.0.15:9095
 SAMVAD_USERNAME=admin
 SAMVAD_PASSWORD=Admin@12
 PORT=18000
 MAX_MESSAGES=100
 INSPECT_MS=20000
 SHUTTLE_PRO_ENABLED=true
+MOS_PORT=10540
+MOS_ID=WTVISION.STUDIO.MOS
+MOS_DEVICE_ID=DDNRCS
+DB_HOST=192.168.15.112
+DB_USER=itmaint
+DB_PASSWORD=change-me
+DB_NAME=nrcsnew
+NEWDATABASE=true
+SAMVAD_SEND_DELAY_MS=150
 ```
 
 `scripts/next-with-env-port.mjs` loads `.env` before starting Next.js, so changing `PORT` changes the local web app port.
+
+The Samvad HTTP URL is derived as `http://SAMVAD_HOST:SAMVAD_HTTP_PORT`, and the WebSocket URL is derived as `ws://SAMVAD_HOST:SAMVAD_WS_PORT`. `MOS_IP` is optional; if omitted, MOS TCP also uses `SAMVAD_HOST`.
 
 ## Technologies
 
@@ -55,6 +64,8 @@ SHUTTLE_PRO_ENABLED=true
 - **fast-xml-parser**: Parses Samvad XML messages into JavaScript objects.
 - **mammoth**: Extracts plain text from `.docx` files before sending them to a runorder.
 - **shuttle-control-usb**: Reads Contour ShuttlePRO v2 USB events directly from Node.
+- **mysql2**: Reads NRCS bulletin rows from MySQL for the StudioCG-style `to Samvad` workflow.
+- **Node TCP**: Sends MOS XML to Samvad over the MOS gateway port.
 - **PowerShell/System.Drawing**: On Windows, `/api/system-fonts` lists installed system fonts for the font-family combo.
 
 ## Main UI
@@ -67,6 +78,7 @@ SHUTTLE_PRO_ENABLED=true
 - Control speed, play/pause, previous story, next story, font size, and whole-runorder font family.
 - Load `.txt` or `.docx` files and replace all stories in the current runorder.
 - Use ShuttlePRO v2 hardware controls with the same button/ring mapping style as the older teleprompter project.
+- Send an NRCS bulletin to Samvad through MOS TCP using the StudioCG-style `to Samvad` button.
 
 ## ShuttlePRO v2
 
@@ -170,6 +182,26 @@ Starts the ShuttlePRO listener manually, even if `SHUTTLE_PRO_ENABLED` is not se
 `POST /api/shuttle/stop`
 
 Stops the ShuttlePRO listener.
+
+### MOS To Samvad
+
+`GET /api/mos/runorders?date=2026-06-24`
+
+Lists distinct NRCS runorder names for the dropdown beside the `to Samvad` button. With `NEWDATABASE=true`, names come from the MySQL `bulletin` master table, matching StudioCG's `getNewsID` behavior. With `NEWDATABASE=false`, names come from the older `newsid` table. The date parameter is accepted for UI compatibility, but the dropdown list is not filtered by date.
+
+`POST /api/mos/to-samvad`
+
+Fetches stories from the NRCS MySQL `script` table and sends a MOS `roReplace` followed by `roStorySend` messages to Samvad.
+
+```json
+{
+  "selectedDate": "2026-06-24",
+  "selectedRunOrderTitle": "0600 Hrs",
+  "sendMode": "full"
+}
+```
+
+The UI shows this as a `to Samvad` button below the speed control panel. Required `.env` values are `MOS_PORT`, `MOS_ID`, `MOS_DEVICE_ID`, `DB_HOST`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`. `MOS_IP` is optional and falls back to `SAMVAD_HOST`.
 
 ### Runorder Tree
 
