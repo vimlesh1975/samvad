@@ -854,7 +854,7 @@ export default function Home() {
               <input accept=".txt,text/plain,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={loadRunorderLinesFile} type="file" />
             </label>
             <button disabled={status?.state !== 'open' || !runorderLines.trim()} onClick={() => sendRunorderContent('lines')} type="button">
-              Send Lines To Runorder
+              Send Lines To current Runorder
             </button>
             {runorderContentStatus ? <span className="send-status">{runorderContentStatus}</span> : null}
           </div>
