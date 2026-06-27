@@ -768,6 +768,7 @@ export default function Home() {
             {sendStatus ? <span className="send-status">{sendStatus}</span> : null}
           </div>
           <div className="mos-send-panel">
+            <div className="mos-panel-label">Run Orders from DD NRCS</div>
             <div className="mos-send-controls">
               <input
                 aria-label="Samvad runorder date"
@@ -798,7 +799,7 @@ export default function Home() {
                 onClick={sendMosRunorderToSamvad}
                 type="button"
               >
-                to Samvad
+                Send to Samvad
               </button>
               {mosSendStatus ? <span className="send-status">{mosSendStatus}</span> : null}
             </div>
@@ -847,6 +848,7 @@ export default function Home() {
             {fontFamilyStatus ? <span className="send-status">{fontFamilyStatus}</span> : null}
           </div>
           <div className="renderer-actions" style={{ marginTop: '12px' }}>
+            <div className="file-runorder-label">Run Orders from Text or Word File</div>
             <label className="file-button">
               <span>Load Text or Word File</span>
               <input accept=".txt,text/plain,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={loadRunorderLinesFile} type="file" />
@@ -1049,7 +1051,7 @@ function RundownWorkspace({
     <section className="rundown-workspace">
       <div className="panel rundown-column">
         <div className="panel-heading">
-          <h2>Run Orders</h2>
+          <h2>Run Orders from samvad</h2>
           <button disabled={status?.state !== 'open'} onClick={refreshRunorderTree} type="button">
             Refresh
           </button>

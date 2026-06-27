@@ -593,6 +593,19 @@ h2 {
   margin-top: 10px;
 }
 
+.mos-panel-label {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.file-runorder-label {
+  color: var(--text);
+  flex-basis: 100%;
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .mos-send-controls {
   align-items: center;
   display: flex;
