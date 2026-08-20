@@ -13,6 +13,7 @@ export default function Home() {
   const [foldersState, setFoldersState] = useState({ folders: [] });
   const [error, setError] = useState('');
   const [speedInput, setSpeedInput] = useState('');
+  const [tempSpeed, setTempSpeed] = useState(1);
   const [fontSizeInput, setFontSizeInput] = useState('');
   const [fontFamilyInput, setFontFamilyInput] = useState('Arial');
   const [systemFonts, setSystemFonts] = useState(fallbackFonts);
@@ -362,6 +363,10 @@ export default function Home() {
   function handleSpeedContextMenu(event) {
     event.preventDefault();
     togglePlayPause();
+  }
+
+  function handleEscape() {
+    sendControl('Pause');
   }
 
   async function sendFontSizeValue(fontSize) {
@@ -722,6 +727,8 @@ export default function Home() {
         treeMenu={treeMenu}
         stepSpeed={stepSpeed}
         togglePlayPause={togglePlayPause}
+        handleEscape={handleEscape}
+        sendControl={sendControl}
       />
 
       <section className="grid two top-control-grid">
@@ -898,6 +905,8 @@ function RundownWorkspace({
   treeMenu,
   stepSpeed,
   togglePlayPause,
+  handleEscape,
+  sendControl,
 }) {
   const [selectedStoryID, setSelectedStoryID] = useState('');
   const [keyboardStoryNumber, setKeyboardStoryNumber] = useState('');
@@ -987,8 +996,9 @@ function RundownWorkspace({
         return;
       }
 
-      if (event.key === 'Escape' && storyNumberBuffer.current) {
+      if (event.key === 'Escape') {
         clearStoryNumber();
+        handleEscape?.();
         return;
       }
 
@@ -1032,15 +1042,21 @@ function RundownWorkspace({
       } else if (event.key === 'PageUp') {
         event.preventDefault();
         moveStory(-1);
-      } else if (event.key === 'ArrowUp') {
+      } else if (event.key === 'ArrowUp' || event.key === 'AudioVolumeUp' || event.code === 'AudioVolumeUp') {
         event.preventDefault();
         stepSpeed(1);
-      } else if (event.key === 'ArrowDown') {
+      } else if (event.key === 'ArrowDown' || event.key === 'AudioVolumeDown' || event.code === 'AudioVolumeDown') {
         event.preventDefault();
         stepSpeed(-1);
       } else if (event.key === ' ') {
         event.preventDefault();
         togglePlayPause();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        handleEscape?.();
+      } else if (event.key === 'F5') {
+        event.preventDefault();
+        sendControl?.('Play');
       }
     }
     window.addEventListener('keydown', handlePageKeys);
